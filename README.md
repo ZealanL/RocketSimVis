@@ -17,8 +17,8 @@ All models are made by me to resemble things in the game, except arena meshes wh
 You are welcome to use my models for whatever you like so long as you credit me.
 
 ## Dependencies 
-RocketSim (as a submodule)
-A modified version of [cpp_sockets](https://github.com/computersarecool/cpp_sockets)
-SDL2 (as cmake package) for general window creation, input, etc.
-OpenGL for rendering
-GLEW (as cmake package) to manage OpenGL
+ - RocketSim (as a submodule)
+ - A modified version of [cpp_sockets](https://github.com/computersarecool/cpp_sockets)
+ - SDL2 (as cmake package) for general window creation, input, etc.
+ - OpenGL for rendering
+ - GLEW (as cmake package) to manage OpenGL

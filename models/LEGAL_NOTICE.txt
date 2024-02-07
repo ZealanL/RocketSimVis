@@ -1,0 +1,2 @@
+Models in this folder were created from scratch specifically for this project.
+These are not the actual game models and contain nothing from Rocket League.

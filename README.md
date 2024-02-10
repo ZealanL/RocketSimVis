@@ -3,6 +3,9 @@ My visualizer for [RocketSim](https://github.com/ZealanL/RocketSim)
 
 ![rocketsimvis](https://github.com/ZealanL/RocketSimVis/assets/36944229/644f618a-88de-409f-9722-a4ddcd4b490e)
 
+## Usage
+A python example client for `rlgym_sim` can be found here: [rlgym_sim_client_example.py](rlgym_sim_client_example.py)
+
 ## Is This Official?
 No, there are many other cool visualizers available for RocketSim, I just thought I'd make mine open-source for those who want it.
 

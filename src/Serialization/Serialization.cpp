@@ -59,23 +59,25 @@ bool Serialization::DeserializeUpdateArena(Arena* arena, DataStreamIn& in) {
 	arena->tickCount = in.Read<uint32_t>();
 	
 	{ // Derialize cars
-		uint32_t numCars = in.Read<uint32_t>();
-
-		while (numCars > arena->_cars.size()) {
-			arena->RemoveCar(*arena->_cars.begin());
-		}
-
-		while (numCars < arena->_cars.size()) {
-			arena->AddCar(Team::BLUE);
-		}
-
-		auto carItr = arena->_cars.begin();
-		for (int i = 0; i < numCars; i++) {
-			if (!DeserializeUpdateCar(*carItr, in)) {
-				return false;
-			}
-			carItr++;
-		}
+	       uint32_t numCars = in.Read < uint32_t > ();
+	
+	       // Clear the existing car list only if the number of cars has changed
+	       if (numCars != arena -> _cars.size()) {
+	          arena -> _cars.clear();
+	
+	          // Add new cars to the list
+	          for (uint32_t i = 0; i < numCars; i++) {
+	             arena -> AddCar(Team::BLUE);
+	          }
+	       }
+	
+	       auto carItr = arena -> _cars.begin();
+	       for (int i = 0; i < numCars; i++) {
+	          if (!DeserializeUpdateCar( * carItr, in)) {
+	             return false;
+	          }
+	          carItr++;
+	       }
 	}
 
 #if 0

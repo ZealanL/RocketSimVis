@@ -61,11 +61,11 @@ bool Serialization::DeserializeUpdateArena(Arena* arena, DataStreamIn& in) {
 	{ // Derialize cars
 		uint32_t numCars = in.Read<uint32_t>();
 
-		while (numCars > arena->_cars.size()) {
+		while (arena->_cars.size() > numCars) {
 			arena->RemoveCar(*arena->_cars.begin());
 		}
 
-		while (numCars < arena->_cars.size()) {
+		while (arena->_cars.size() < numCars) {
 			arena->AddCar(Team::BLUE);
 		}
 

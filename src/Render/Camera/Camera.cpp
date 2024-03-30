@@ -42,8 +42,22 @@ void Camera::UpdateCarCam(
 	camDir = camDir.Normalized();
 
 	if (inBallCam) {
-		float heightAdjustment = RS_CLAMP((carState.pos.z - ballState.pos.z) / 5, -height, height / 2);
-		//height += heightAdjustment;
+		// If the ball is above us, the camera starts to shift lower and get closer to the car
+		// I refer to this as "leaning"
+		// TODO: This is a lame approximation, in RL it seems to be just sphereical movement clamped to the ground
+
+		Vec dirToBall = (ballState.pos - this->pos).Normalized();
+		float leanScale = RS_MAX(dirToBall.z, 0);
+
+		// Move camera down
+		constexpr float LEAN_HEIGHT_SCALE = 1.0f;
+		height *= 1 - leanScale * LEAN_HEIGHT_SCALE;
+
+		// Move camera closer
+		constexpr float
+			LEAN_DIST_SCALE = 0.4f,
+			LEAN_DIST_EXPONENT = 1.0f;
+		distance *= 1 - powf(leanScale, LEAN_DIST_EXPONENT) * LEAN_DIST_SCALE;
 	}
 
 	Vec offset = -camDir * distance;

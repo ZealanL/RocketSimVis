@@ -47,11 +47,12 @@ bool Serialization::DeserializeUpdateCar(Car* car, DataStreamIn& in) {
 }
 
 bool Serialization::DeserializeUpdateArena(Arena* arena, DataStreamIn& in) {
+	constexpr const char* ERR_PREFIX = "DeserializeUpdateArena(): ";
 
 	uint32_t prefixSig = in.Read<uint32_t>();
 	if (prefixSig != PREFIX_SIGNATURE) {
 #ifdef _DEBUG
-		RS_LOG("DeserializeUpdateArena(): Recieved bad signature, ignoring");
+		RS_LOG(ERR_PREFIX << "Recieved bad signature, ignoring");
 #endif
 		return false;
 	}
@@ -78,19 +79,40 @@ bool Serialization::DeserializeUpdateArena(Arena* arena, DataStreamIn& in) {
 		}
 	}
 
-#if 0
-	{ // Derialize boost pads
+	{ // Deserialize boost pads
 		uint32_t boostPadAmount = in.Read<uint32_t>();
-		if (boostPadAmount != arena->_boostPads.size()) {
-			throw "DeserializeUpdateArena(): Invalid boost pad amount";
-			return false;
-		}
-		for (auto pad : arena->_boostPads) {
-			pad->_internalState.cooldown = in.Read<float>();
-			pad->_internalState.isActive = in.Read<uint8_t>();
+
+		if (boostPadAmount > 0) {
+			if (boostPadAmount != arena->_boostPads.size())
+				RS_ERR_CLOSE(ERR_PREFIX << "Invalid boost pad amount");
+
+			for (int i = 0; i < boostPadAmount; i++) {
+				Vec pos = DeserializeVec(in);
+
+				BoostPadState state = {};
+				state.isActive = in.Read<uint8_t>();
+				state.cooldown = in.Read<float>();
+
+				{ // Find and update our pad using boost pad grid
+					int indexX = pos.x / BoostPadGrid::CELL_SIZE_X + (BoostPadGrid::CELLS_X / 2);
+					int indexY = pos.y / BoostPadGrid::CELL_SIZE_Y + (BoostPadGrid::CELLS_Y / 2);
+
+					if (RS_MIN(indexX, indexY) < 0
+						|| indexX >= BoostPadGrid::CELLS_X || indexX >= BoostPadGrid::CELLS_Y)
+						RS_ERR_CLOSE(ERR_PREFIX << "Invalid boost pad pos: " << pos);
+
+					BoostPad* pad = arena->_boostPadGrid.pads[indexX][indexY];
+					assert(pad);
+					pad->SetState(state);
+				}
+			}
+		} else {
+			// No pads sent
+			// Disable all pads in-game
+			for (auto pad : arena->_boostPads)
+				pad->_internalState.isActive = false;
 		}
 	}
-#endif
 
 	{ // Deserialize ball
 		BallState ballState = BallState();

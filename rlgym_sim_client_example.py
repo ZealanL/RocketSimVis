@@ -57,6 +57,9 @@ def send_data_to_rsvis(gs: GameState):
 	for player in gs.players:
 		msg += pack_car(player)
 		
+	# Boost pads (not implemented yet)
+	msg += struct.pack("I", 0)
+		
 	# Send ball
 	msg += pack_physobj(gs.ball)
 

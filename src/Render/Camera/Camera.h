@@ -15,7 +15,7 @@ struct Camera {
 		const CarState& carState, const BallState& ballState, 
 		bool inBallCam, 
 		float deltaTime, 
-		float distance = 290,
+		float distance = 310,
 		float height = 120.f,
 		float aboveCarHeight = 100.f
 	);

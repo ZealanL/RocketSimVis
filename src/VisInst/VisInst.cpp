@@ -218,12 +218,12 @@ void VisInst::UpdateCarInfos() {
 
 	// Remove old car infos
 	while (carInfos.size() > arenaInst->_cars.size()) {
-
+		// TODO: Implement
 	}
 }
 
 void VisInst::UpdateNewStates() {
-	constexpr float TELEPORT_MIN_DIST = 400;
+	constexpr float TELEPORT_MIN_DIST = 800;
 
 	auto ballState = arenaInst->ball->GetState();
 	if (ballState.pos.DistSq(ballRenderEnt.next.pos) > (TELEPORT_MIN_DIST * TELEPORT_MIN_DIST)) {

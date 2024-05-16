@@ -209,8 +209,6 @@ class RocketSimVisWindow(mglw.WindowConfig):
                 cam_offset.z +=height
 
                 pos = car_pos + cam_offset
-            else:
-                self.ball_cam_idx = -1
 
         return pos, target_pos, CAM_FOV
 

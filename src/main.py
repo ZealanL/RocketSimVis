@@ -217,6 +217,9 @@ class RocketSimVisWindow(mglw.WindowConfig):
     def render(self, total_time, delta_time):
 
         with global_state_mutex:
+            if not global_state_manager.state.ball_state.has_rot:
+                global_state_manager.state.ball_state.rotate_with_ang_vel(delta_time)
+
             state = copy.deepcopy(global_state_manager.state)
 
         while len(self.car_ribbons) != len(state.car_states):
@@ -278,8 +281,6 @@ class RocketSimVisWindow(mglw.WindowConfig):
 
 
         if True: # Render ball
-            if not state.ball_state.has_rot:
-                state.ball_state.rotate_with_ang_vel(delta_time)
             ball_phys = state.ball_state
             ball_pos = ball_phys.get_pos(interp_ratio)
             self.render_model(

@@ -169,6 +169,44 @@ class RocketSimVisWindow(mglw.WindowConfig):
         )
         glEnable(GL_CULL_FACE)
 
+    def calc_camera_state(self, interp_ratio):
+        pos = Vector3((-4000, 0, 1000))
+        target_pos = global_state_manager.state.ball_state.get_pos(interp_ratio)
+
+        # TODO: Make configurable params
+        CAM_DISTANCE = 270
+        CAM_HEIGHT = 120
+        CAM_FOV = 90
+        CAM_LEAN_HEIGHT_SCALE = 1.0
+        CAM_LEAN_DIST_SCALE = 0.4
+        CAM_LEAN_DIST_EXP = 1.0
+
+        if self.ball_cam_idx > -1:
+            if len(global_state_manager.state.car_states) > self.ball_cam_idx:
+
+                height = CAM_HEIGHT
+                dist = CAM_DISTANCE
+
+                car_pos = global_state_manager.state.car_states[self.ball_cam_idx].phys.get_pos(interp_ratio)
+
+                cam_dir = (target_pos - car_pos).normalized
+
+                # As we tilt up, move the camera down
+                lean_scale = max(cam_dir.z, 0)
+                height *= 1 - lean_scale * CAM_LEAN_HEIGHT_SCALE
+
+                # As we tilt up, move the camera closer
+                dist *= 1 - pow(lean_scale, CAM_LEAN_DIST_EXP) * CAM_LEAN_DIST_SCALE
+
+                cam_offset = cam_dir * Vector3((-1, -1, 0)) * dist
+                cam_offset.z +=height
+
+                pos = car_pos + cam_offset
+            else:
+                self.ball_cam_idx = -1
+
+        return pos, target_pos, CAM_FOV
+
     def render(self, total_time, delta_time):
         with global_state_mutex:
             cur_time = time.time()
@@ -188,32 +226,12 @@ class RocketSimVisWindow(mglw.WindowConfig):
             glEnable(GL_LINE_SMOOTH)
             glHint(GL_LINE_SMOOTH_HINT, GL_NICEST)
 
-            camera_pos = Vector3((-4000, 0, 1000))
-            target_pos = global_state_manager.state.ball_state.get_pos(interp_ratio)
+            camera_pos, camera_target_pos, camera_fov = self.calc_camera_state(interp_ratio)
 
-            # TODO: Make configurable params
-            CAM_DISTANCE = 270
-            CAM_HEIGHT = 120
-            CAM_FOV = 100
-
-            if self.ball_cam_idx > -1:
-                if len(global_state_manager.state.car_states) > self.ball_cam_idx:
-                    car_pos = global_state_manager.state.car_states[self.ball_cam_idx].phys.get_pos(interp_ratio)
-
-                    cam_dir = (target_pos - car_pos).normalized
-
-                    cam_offset = cam_dir * Vector3((-1, -1, 0)) * CAM_DISTANCE
-                    cam_offset.z += CAM_HEIGHT
-
-                    camera_pos = car_pos + cam_offset
-                else:
-                    self.ball_cam_idx = -1
-
-
-            proj = Matrix44.perspective_projection(CAM_FOV, self.aspect_ratio, 0.1, 50 * 1000.0)
+            proj = Matrix44.perspective_projection(camera_fov, self.aspect_ratio, 0.1, 50 * 1000.0)
             lookat = Matrix44.look_at(
                 camera_pos,
-                target_pos,
+                camera_target_pos,
                 (0.0, 0.0, 1.0),
             )
 

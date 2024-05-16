@@ -74,8 +74,8 @@ class RocketSimVisWindow(mglw.WindowConfig):
         self.vao_ball = self.load_make_vao("Ball.obj")
 
         self.vaos_boost_pad = [
-            [ self.load_make_vao("BoostPad_Small.obj"), self.load_make_vao("BoostPad_Small_Glow.obj")],
-            [ self.load_make_vao("BoostPad_Big.obj"), self.load_make_vao("BoostPad_Big_Glow.obj") ]
+            [ self.load_make_vao("BoostPad_Small_0.obj"), self.load_make_vao("BoostPad_Small_1.obj")],
+            [ self.load_make_vao("BoostPad_Big_0.obj"), self.load_make_vao("BoostPad_Big_1.obj") ]
         ]
 
         self.ts_octane = [
@@ -266,18 +266,12 @@ class RocketSimVisWindow(mglw.WindowConfig):
                 pos = state.boost_pad_locations[i].copy()
                 pos.z = 0
 
-                for j in range(2):
-                    if j == 1 and not is_active:
-                        continue
-
-                    self.render_model(
-                        pos, Vector3((1, 0, 0)), Vector3((0, 0, 1)),
-                        self.vaos_boost_pad[int(is_big)][j],
-                        self.t_boostpad,
-                        2,
-
-                        Vector4((1, 0.9, 0.2, 1.0)) if (j == 1) else None
-                    )
+                self.render_model(
+                    pos, Vector3((1, 0, 0)), Vector3((0, 0, 1)),
+                    self.vaos_boost_pad[int(is_big)][int(is_active)],
+                    self.t_boostpad,
+                    3,
+                )
 
 
         if True: # Render ball
@@ -289,13 +283,17 @@ class RocketSimVisWindow(mglw.WindowConfig):
             )
 
             if True: # Update and render ball ribbon
-                RIBBON_LIFETIME = 0.8
+                ball_speed = ball_phys.vel.length
+                speed_frac = (max(0, min(1, ball_speed / 2800)) ** 2)
+                ribbon_alpha = speed_frac * 0.75
+                ribbon_lifetime = 0.8 * speed_frac
+
                 self.ball_ribbon.update(
-                    ball_phys.vel.length > 300,
+                    ball_speed > 300,
                     0,
                     ball_pos,
                     Vector3((100,0,0)),
-                    RIBBON_LIFETIME,
+                    ribbon_lifetime,
                     delta_time
                 )
 
@@ -305,10 +303,10 @@ class RocketSimVisWindow(mglw.WindowConfig):
                 self.render_ribbon(
                     self.ball_ribbon,
                     camera_pos,
-                    RIBBON_LIFETIME,
+                    ribbon_lifetime,
                     50,
-                    RIBBON_LIFETIME / 10,
-                    Vector4((1, 1, 1, 0.75))
+                    ribbon_lifetime / 10,
+                    Vector4((1, 1, 1, ribbon_alpha))
                 )
 
         if True: # Render cars

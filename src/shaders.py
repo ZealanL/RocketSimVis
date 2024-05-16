@@ -97,8 +97,12 @@ void main() {
 		vec3 baseColor = vertColor.xyz * ((sunLightColor * sunLightScale) + (ambientLightColor * ambientLightScale));
 		float finalExp = 0.9;
 		f_color = vec4(pow(baseColor, vec3(finalExp, finalExp, finalExp)), vertColor[3]);
-		
-		if (globalColor != vec4(0,0,0,0)) {
+
+        if (vertColor.a != 1) {
+            f_color = vertColor;
+        }
+
+	    if (globalColor != vec4(0,0,0,0)) {
 		    f_color = globalColor;
 		}
     }

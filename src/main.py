@@ -1,0 +1,335 @@
+import os
+import math
+import random
+import threading
+import sys 
+import argparse
+
+import pyrr.vector3
+
+from const import *
+from shaders import *
+from socket_listener import SocketListener
+from state_manager import *
+from ribbon import *
+
+import moderngl
+from OpenGL.GL import *
+from OpenGL.GLU import *
+
+import numpy as np
+
+from pyrr import Quaternion, Matrix33, Matrix44, Vector3, Vector4
+
+import moderngl_window as mglw
+
+import pywavefront
+
+
+# Makes Y up instead of Z
+def yup(v):
+    v = Vector3(v)
+    old_y = v.y
+    v.y = v.z
+    v.z = old_y
+    return v
+
+class RocketSimVisWindow(mglw.WindowConfig):
+    gl_version = (4, 0)
+    window_size = (WINDOW_SIZE_X, WINDOW_SIZE_Y)
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        self.ball_cam_idx = 0
+
+        self.prev_interp_ratio = 0
+
+        ##########################################
+
+        print("Initializing shaders...")
+        self.prog = self.ctx.program(
+            vertex_shader=VERT_SHADER,
+            fragment_shader=FRAG_SHADER,
+            geometry_shader=GEOM_SHADER
+        )
+
+        self.m_vp = self.prog['m_vp']
+        self.m_model = self.prog['m_model']
+        self.globalColor = self.prog['globalColor']
+        self.enable_arena_coloring = self.prog['enableArenaColoring']
+        self.camera_pos = self.prog['cameraPos']
+
+        ##########################################
+
+        print("Data path:", DATA_DIR_PATH)
+        print("Loading models and textures...")
+        self.vao_arena = self.load_make_vao("ArenaMeshCustom.obj")
+
+        self.vao_octane = self.load_make_vao("Octane.obj")
+        self.vao_ball = self.load_make_vao("Ball.obj")
+
+        self.vao_boost_pad = [
+            [self.load_make_vao("BoostPad_Small.obj"), self.load_make_vao("BoostPad_Small_Glow.obj")],
+            [ self.load_make_vao("BoostPad_Big.obj"), self.load_make_vao("BoostPad_Big_Glow.obj") ]
+        ]
+
+        self.ts_octane = [
+            self.load_texture_2d(DATA_DIR_PATH + "T_Octane_B.png"),
+            self.load_texture_2d(DATA_DIR_PATH + "T_Octane_O.png")
+        ]
+        self.t_ball = self.load_texture_2d(DATA_DIR_PATH + "T_Ball.png")
+        self.t_boostpad = self.load_texture_2d(DATA_DIR_PATH + "T_BoostPad.png")
+        self.t_boost_glow = self.load_texture_2d(DATA_DIR_PATH + "T_Boost_Glow.png")
+        self.t_black = self.load_texture_2d(DATA_DIR_PATH + "T_Black.png")
+        self.t_none = self.load_texture_2d(DATA_DIR_PATH + "T_None.png")
+
+        ############################################
+
+        self.ribbon_max_verts = 100
+        self.ribbon_verts = np.random.randn(self.ribbon_max_verts * 3) * 1000
+        self.ribbon_vbo = self.ctx.buffer(self.ribbon_verts.astype('f4'))
+        self.ribbon_vao = self.ctx.simple_vertex_array(self.prog, self.ribbon_vbo, "in_position")
+
+        print("Done.")
+
+    def load_make_vao(self, model_name):
+        model = self.load_scene(DATA_DIR_PATH + "/" + model_name)
+        return model.root_nodes[0].mesh.vao.instance(self.prog)
+
+    def render_model(self, pos, forward, up, model_vao, texture, scale = 1.0, global_color = Vector4((0, 0, 0, 0)), mode = moderngl.TRIANGLES):
+        if pos is None:
+            model_mat = Matrix44.identity()
+        else:
+            pos = Vector3(pos)
+            forward = Vector3(forward)
+            up = Vector3(up)
+            right = pyrr.vector3.cross(forward, up)
+
+            model_mat = Matrix44([
+                forward[0], forward[1], forward[2], 0,
+                -right[0], -right[1], -right[2], 0,
+                up[0], up[1], up[2], 0,
+                pos[0], pos[1], pos[2], 1
+            ]) * scale
+
+        self.m_model.write(model_mat.astype('f4'))
+        self.globalColor.write(global_color.astype('f4'))
+
+        if texture is not None:
+            texture.use()
+        else:
+            self.t_none.use()
+
+        model_vao.render(mode)
+
+    def render_ribbon(self, ribbon: RibbonEmitter, camera_pos, lifetime, width, start_taper_time, color):
+        if len(ribbon.points) == 0:
+            return
+
+        vertices = []
+
+        first_point = ribbon.points[0]
+        cam_to_ribbon_dir = -(first_point.pos - camera_pos).normalized
+        ribbon_away_dir = first_point.vel.normalized
+        ribbon_sideways_dir = ribbon_away_dir.cross(cam_to_ribbon_dir)
+
+        for point in ribbon.points: # type: RibbonPoint
+            if not point.connected:
+                continue
+
+            if point.time_active < start_taper_time:
+                width_scale = point.time_active / start_taper_time
+            else:
+                width_scale = 1 - (point.time_active / lifetime)
+
+            offset = ribbon_sideways_dir * width * width_scale
+            for i in range(2):
+                offset_scale = 1 if (i == 1) else -1
+                vertex_pos = point.pos + (offset * offset_scale)
+                if len(vertices) < self.ribbon_max_verts:
+                    vertices.append(vertex_pos)
+                else:
+                    break
+
+        if len(vertices) > 0:
+            while len(vertices) < self.ribbon_max_verts:
+                vertices.append(vertices[-1])
+        else:
+            return
+
+        self.ribbon_vbo.write(np.array(vertices).astype('f4'), 0)
+
+        glDisable(GL_CULL_FACE)
+        self.render_model(
+            None, None, None,
+            self.ribbon_vao, self.t_none, 20,
+            color,
+            moderngl.TRIANGLE_STRIP
+        )
+        glEnable(GL_CULL_FACE)
+
+    def render(self, total_time, delta_time):
+        with global_state_mutex:
+            cur_time = time.time()
+            interp_interval = max(global_state_manager.state.recv_interval, 1e-6)
+            interp_ratio = min(max((cur_time - global_state_manager.state.recv_time) / interp_interval, 0), 1)
+
+            self.enable_arena_coloring.value = False
+
+            self.ctx.clear(0, 0, 0)
+            self.ctx.enable(moderngl.DEPTH_TEST)
+            self.ctx.enable(moderngl.BLEND)
+
+            self.ctx.cull_face = "back"
+            self.ctx.front_face = "ccw"
+            self.ctx.enable(moderngl.CULL_FACE)
+
+            glEnable(GL_LINE_SMOOTH)
+            glHint(GL_LINE_SMOOTH_HINT, GL_NICEST)
+
+            camera_pos = Vector3((-4000, 0, 1000))
+            target_pos = global_state_manager.state.ball_state.get_pos(interp_ratio)
+
+            # TODO: Make configurable params
+            CAM_DISTANCE = 270
+            CAM_HEIGHT = 120
+            CAM_FOV = 100
+
+            if self.ball_cam_idx > -1:
+                if len(global_state_manager.state.car_states) > self.ball_cam_idx:
+                    car_pos = global_state_manager.state.car_states[self.ball_cam_idx].phys.get_pos(interp_ratio)
+
+                    cam_dir = (target_pos - car_pos).normalized
+
+                    cam_offset = cam_dir * Vector3((-1, -1, 0)) * CAM_DISTANCE
+                    cam_offset.z += CAM_HEIGHT
+
+                    camera_pos = car_pos + cam_offset
+                else:
+                    self.ball_cam_idx = -1
+
+
+            proj = Matrix44.perspective_projection(CAM_FOV, self.aspect_ratio, 0.1, 50 * 1000.0)
+            lookat = Matrix44.look_at(
+                camera_pos,
+                target_pos,
+                (0.0, 0.0, 1.0),
+            )
+
+            self.camera_pos.write(camera_pos.astype('f4'))
+            self.m_vp.write((proj * lookat).astype('f4'))
+
+            if True: # Render ball
+                if not global_state_manager.state.ball_state.has_rot:
+                    global_state_manager.state.ball_state.rotate_with_ang_vel(delta_time)
+                ball_phys = global_state_manager.state.ball_state
+                ball_pos = ball_phys.get_pos(interp_ratio)
+                self.render_model(
+                    ball_pos,
+                    ball_phys.get_forward(interp_ratio), ball_phys.get_up(interp_ratio), self.vao_ball, self.t_ball
+                )
+
+                if True:  # Render ball ribbon
+                    RIBBON_LIFETIME = 0.8
+                    ball_phys.ribbon.update(
+                        ball_phys.vel.length > 300,
+                        0,
+                        ball_pos,
+                        Vector3((100,0,0)),
+                        RIBBON_LIFETIME,
+                        delta_time
+                    )
+
+                    if ball_phys.is_teleporting():
+                        ball_phys.ribbon.points.clear()
+
+                    self.render_ribbon(
+                        ball_phys.ribbon,
+                        camera_pos,
+                        RIBBON_LIFETIME,
+                        50,
+                        RIBBON_LIFETIME / 10,
+                        Vector4((1, 1, 1, 0.75))
+                    )
+
+            if True: # Render cars
+                for car_state in global_state_manager.state.car_states:
+
+                    if car_state.is_demoed:
+                        continue
+
+                    car_pos = car_state.phys.get_pos(interp_ratio)
+                    car_forward = car_state.phys.get_forward(interp_ratio)
+                    car_up = car_state.phys.get_up(interp_ratio)
+                    self.render_model(
+                        car_pos,
+                        car_forward, car_up, self.vao_octane, self.ts_octane[car_state.team_num]
+                    )
+
+                    if True: # Render car ribbon
+                        RIBBON_LIFETIME = 0.8
+                        ribbon_emit_pos = car_pos - (car_forward * 40) + (car_up * 10)
+                        ribbon_vel = car_forward * -100
+                        car_state.phys.ribbon.update(
+                            car_state.is_boosting,
+                            0,
+                            ribbon_emit_pos,
+                            ribbon_vel,
+                            RIBBON_LIFETIME,
+                            delta_time
+                        )
+
+                        if car_state.phys.is_teleporting():
+                            car_state.phys.ribbon.points.clear()
+
+                        self.render_ribbon(
+                            car_state.phys.ribbon,
+                            camera_pos,
+                            RIBBON_LIFETIME,
+                            20,
+                            RIBBON_LIFETIME / 10,
+                            Vector4((1, 0.9, 0.4, 1))
+                        )
+
+
+            self.ctx.wireframe = True
+            self.enable_arena_coloring.value = True
+            self.render_model(None, None, None, self.vao_arena, self.t_boost_glow)
+            self.enable_arena_coloring.value = False
+            self.ctx.wireframe = False
+
+            # Render black matte behind
+            # TODO: Makes lines aliased
+            #arena_matte_scale = 1.02 # Shift back slightly to fix z fighting
+            #self.render_model(None, None, None, self.vao_arena, self.t_black, arena_matte_scale)
+
+            self.prev_interp_ratio = interp_ratio
+
+''' TODO: Breaks moderngl?
+arg_parser = argparse.ArgumentParser(
+                    prog='RocketSimVis',
+                    description='Python visualizer for RocketSim games',
+                    epilog='')
+arg_parser.add_argument("-p", "--port")
+'''
+
+def run_socket_thread(port):
+    listener = SocketListener()
+    listener.run(port)
+
+def main():
+    #cmd_args = arg_parser.parse_args()
+    port = 9273
+    
+    print("Starting RocketSimVis...")
+
+    print("Starting socket thread...")
+    socket_thread = threading.Thread(target=run_socket_thread, args=(int(port),))
+    socket_thread.start()
+
+    print("Starting visualizer window...")
+    RocketSimVisWindow.run()
+
+if __name__ == "__main__":
+    main()

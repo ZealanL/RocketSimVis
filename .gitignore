@@ -46,5 +46,11 @@ out/
 packages.config
 CMakeSettings.json
 
+# Python cache
+__pycache__
+
+# IntelliJ/PyCharm cache
+.idea
+
 # Anything starting with three underscores
 ___*

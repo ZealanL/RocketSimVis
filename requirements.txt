@@ -1,0 +1,5 @@
+moderngl
+moderngl-window
+pyrr
+numpy
+pywavefront

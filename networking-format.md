@@ -14,7 +14,9 @@ The format for the gamestate, in pseudo-JSON, is:
 	
 	OPTIONAL "forward": [ <x>, <y>, <z> ], # Forward direction as a normalized vector
 	OPTIONAL "up": [ <x>, <y>, <z> ], # Upward direction as a normalized vector
-	# NOTE: If rotation ("forward" and "up") are not provided, the visualizer will track its own internal rotation for the object, and update it with "ang_vel" every frame
+	# NOTE: If rotation ("forward" and "up") are not provided, 
+	#       the visualizer will track its own internal rotation for the object, 
+	#       and update it with "ang_vel" every frame
 	
 	"vel": [ <x>, <y>, <z> ],
 	"ang_vel": [ <x>, <y>, <z> ]

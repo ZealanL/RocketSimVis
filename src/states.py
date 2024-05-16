@@ -29,8 +29,6 @@ class PhysState:
         self.vel: Vector3 = Vector3((0, 0, 0))
         self.ang_vel: Vector3 = Vector3((0, 0, 0))
 
-        self.ribbon = RibbonEmitter()
-
     def rotate_with_ang_vel(self, delta_time: float):
         next_right = self.next_up.cross(self.next_forward)
         rot = Matrix33((
@@ -172,11 +170,16 @@ class GameState:
         self.ball_state: PhysState = PhysState()
         self.car_states = []
 
-        self.boost_pad_locations = default_boost_pad_locations
+        self.boost_pad_locations = []
+        for t in default_boost_pad_locations:
+            self.boost_pad_locations.append(Vector3(t))
         self.boost_pad_states = None
 
         self.recv_time = time.time()
         self.recv_interval = 0
+
+    def is_boost_big(self, idx):
+        return self.boost_pad_locations[idx].z == 73
 
     def read_from_json(self, j):
 

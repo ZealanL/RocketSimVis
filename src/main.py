@@ -38,6 +38,7 @@ def yup(v):
 class RocketSimVisWindow(mglw.WindowConfig):
     gl_version = (4, 0)
     window_size = (WINDOW_SIZE_X, WINDOW_SIZE_Y)
+    title = "RocketSimVis"
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -184,9 +185,11 @@ class RocketSimVisWindow(mglw.WindowConfig):
         CAM_DISTANCE = 270
         CAM_HEIGHT = 120
         CAM_FOV = 90
+
         CAM_LEAN_HEIGHT_SCALE = 1.0
         CAM_LEAN_DIST_SCALE = 0.4
         CAM_LEAN_DIST_EXP = 1.0
+        CAM_LEAN_MIN_HEIGHT_CLAMP = 300
 
         if self.ball_cam_idx > -1:
             if len(state.car_states) > self.ball_cam_idx:
@@ -200,7 +203,8 @@ class RocketSimVisWindow(mglw.WindowConfig):
 
                 # As we tilt up, move the camera down
                 lean_scale = max(cam_dir.z, 0)
-                height *= 1 - lean_scale * CAM_LEAN_HEIGHT_SCALE
+                height_clamp = abs(target_pos.z - car_pos.z) / CAM_LEAN_MIN_HEIGHT_CLAMP
+                height *= 1 - min(lean_scale * CAM_LEAN_HEIGHT_SCALE, height_clamp)
 
                 # As we tilt up, move the camera closer
                 dist *= 1 - pow(lean_scale, CAM_LEAN_DIST_EXP) * CAM_LEAN_DIST_SCALE
@@ -369,9 +373,11 @@ arg_parser = argparse.ArgumentParser(
 arg_parser.add_argument("-p", "--port")
 '''
 
+g_socket_listener = None
 def run_socket_thread(port):
-    listener = SocketListener()
-    listener.run(port)
+    global g_socket_listener
+    g_socket_listener = SocketListener()
+    g_socket_listener.run(port)
 
 def main():
     #cmd_args = arg_parser.parse_args()
@@ -385,6 +391,10 @@ def main():
 
     print("Starting visualizer window...")
     RocketSimVisWindow.run()
+
+    print("Shutting down...")
+    g_socket_listener.stop_async()
+    exit()
 
 if __name__ == "__main__":
     main()

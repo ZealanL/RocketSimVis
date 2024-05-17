@@ -19,7 +19,7 @@ class RibbonEmitter:
             self.time_since_emit += delta_time
             if len(self.points) > 0:
                 self.points[0].connected = False
-        else:
+        elif can_emit:
             self.time_since_emit = 0
 
             new_point = RibbonPoint(emit_pos, emit_vel)

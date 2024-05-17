@@ -6,18 +6,25 @@ import json
 import time
 
 class SocketListener:
-    has_received: bool = False
-    buffer_size: int = 1024 * 1024
+    def __init__(self):
+        self.has_received: bool = False
+        self.buffer_size: int = 1024 * 1024
+        self.should_run = True
 
     def run(self, port_num: int):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.bind(('127.0.0.1', port_num))
+        sock.settimeout(0.5)
         print("Created socket on port {}, listening...".format(port_num))
         prev_recv_time = time.time()
-        while True:
+        while self.should_run:
+            try:
+                data, addr = sock.recvfrom(self.buffer_size)
+            except:
+                continue
+
             has_received: True
 
-            data, addr = sock.recvfrom(self.buffer_size)
             j = json.loads(data.decode("utf-8"))
 
             recv_time = time.time()
@@ -28,3 +35,5 @@ class SocketListener:
                 state_manager.global_state_manager.state.recv_interval = recv_time - prev_recv_time
 
             prev_recv_time = time.time()
+    def stop_async(self):
+        self.should_run = False

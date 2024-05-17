@@ -75,8 +75,8 @@ void main() {
         //f_color *= 1 / (1 + min_edge_dist * 0.2);
         
         float edge_ratio = 1 * float(min_edge_dist < 10);
-        float fresnel = abs(dot(normFromCam, inData.norm));
-        float light_ratio = min(fresnel * 0.5 + max(0, inData.norm.z) * 0.3, 1);
+        float backlight = abs(inData.norm.y * 0.7 + inData.norm.x * 0.3) * 0.6 + 0.4;
+        float light_ratio = min(backlight * 0.4 + max(0, inData.norm.z) * 0.3, 1);
         
         f_color.xyz *= light_ratio + edge_ratio * (1 - light_ratio);
         f_color.a = 1;

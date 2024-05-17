@@ -290,11 +290,11 @@ class RocketSimVisWindow(mglw.WindowConfig):
             if True: # Update and render ball ribbon
                 ball_speed = ball_phys.vel.length
                 speed_frac = (max(0, min(1, ball_speed / 2800)) ** 2)
-                ribbon_alpha = speed_frac * 0.75
-                ribbon_lifetime = max(0.25, 0.8 * speed_frac)
+                ribbon_alpha = 0.75
+                ribbon_lifetime = 0.8
 
                 self.ball_ribbon.update(
-                    ball_speed > 300,
+                    ball_speed > 600,
                     0,
                     ball_pos,
                     Vector3((100,0,0)),

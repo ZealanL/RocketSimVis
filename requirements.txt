@@ -1,5 +1,6 @@
 moderngl
 moderngl-window
+PyOpenGL
 pyrr
 numpy
 pywavefront

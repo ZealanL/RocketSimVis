@@ -90,13 +90,19 @@ class PhysState:
 
     def get_forward(self, interp_ratio):
         if self.has_rot:
-            return (self.prev_forward + (self.next_forward - self.prev_forward) * interp_ratio).normalized
+            if not self.is_teleporting():
+                return (self.prev_forward + (self.next_forward - self.prev_forward) * interp_ratio).normalized
+            else:
+                return self.prev_forward
         else:
             return self.next_forward
 
     def get_up(self, interp_ratio):
         if self.has_rot:
-            return (self.prev_up + (self.next_up - self.prev_up) * interp_ratio).normalized
+            if not self.is_teleporting():
+                return (self.prev_up + (self.next_up - self.prev_up) * interp_ratio).normalized
+            else:
+                return self.prev_up
         else:
             return self.next_up
 

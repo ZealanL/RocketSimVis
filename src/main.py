@@ -328,7 +328,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
                 )
 
                 if True: # Update and render car ribbon
-                    RIBBON_LIFETIME = 0.8
+                    RIBBON_LIFETIME = 0.3
                     ribbon_emit_pos = car_pos - (car_forward * 40) + (car_up * 10)
                     ribbon_vel = car_forward * -100
                     car_ribbon.update(

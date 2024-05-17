@@ -36,13 +36,17 @@ in FD {
 	vec2 text;
 } inData;
 
+in vec3 distanceToEdges;
+
 out vec4 f_color;
 
 void main() { 
+    vec3 normFromCam = normalize(cameraPos - inData.vert);
+
     if (enableArenaColoring) {
         vec4 orange = vec4(1, 0.5, 0, 1);
         vec4 blue = vec4(0, 0.3, 1, 1);
-        float ratio = clamp((inData.vert.y + 0.01) / 5000, -1, 1);
+        float ratio = clamp((inData.vert.y + 0.01) / 6000, -1, 1);
         vec3 arenaCol = vec3(0, 0.5, 0);
         
         if (ratio > 0) {
@@ -54,16 +58,30 @@ void main() {
             arenaCol.b = ratio;
             arenaCol.g = ratio/3;
         }
-        arenaCol.r = max(arenaCol.r, 0.2);
-        arenaCol.g = max(arenaCol.g, 0.2);
-        arenaCol.b = max(arenaCol.b, 0.2);
+        
+        float min_col_val = 0.2;
+        arenaCol.r = max(arenaCol.r, min_col_val);
+        arenaCol.g = max(arenaCol.g, min_col_val);
+        arenaCol.b = max(arenaCol.b, min_col_val);
+        
+        // Prevent color from becoming too dark when gray
+        arenaCol = normalize(arenaCol) * max(length(arenaCol), 0.4);
         
         arenaCol.xyz *= 0.85;
         
         f_color = vec4(arenaCol.x, arenaCol.y, arenaCol.z, 1);
+        
+        float min_edge_dist = min(distanceToEdges.x, min(distanceToEdges.y, distanceToEdges.z));
+        //f_color *= 1 / (1 + min_edge_dist * 0.2);
+        
+        float edge_ratio = 1 * float(min_edge_dist < 10);
+        float fresnel = abs(dot(normFromCam, inData.norm));
+        float light_ratio = min(fresnel * 0.5 + max(0, inData.norm.z) * 0.3, 1);
+        
+        f_color.xyz *= light_ratio + edge_ratio * (1 - light_ratio);
+        f_color.a = 1;
+		f_color *= globalColor;
     } else {
-        vec3 normFromCam = normalize(cameraPos - inData.vert);
-    
         /* New experimental lighting that sucks
         vec4 baseColor = texture(Texture, inData.text).rgba;
         
@@ -89,9 +107,9 @@ void main() {
 		vec3 sunLightColor = vec3(1, 1, 0.8);
 				
 		vec3 ambientLightDir = normalize(vec3(1, 1, 1));
-		vec3 ambientLightColor = vec3(0.1, 0.2, 0.3);
+		vec3 ambientLightColor = vec3(0.1, 0.15, 0.2) * 2;
 				
-		float sunLightScale = dot(sunLightDir, -inData.norm) / 2 + 0.5;
+		float sunLightScale = pow(dot(sunLightDir, -inData.norm) / 2 + 0.5, 2);
 		float ambientLightScale = dot(ambientLightDir, -inData.norm) / 2 + 0.5;
 				
 		vec3 baseColor = vertColor.xyz * ((sunLightColor * sunLightScale) + (ambientLightColor * ambientLightScale));
@@ -128,28 +146,31 @@ out FD {
 	vec2 text;
 } outData;
 
-in vec2 windowPosition[];
-noperspective out vec3 distanceToEdges;
+out vec3 distanceToEdges;
 
-float og_distanceToLine(vec2 f, vec2 p0, vec2 p1) {
-    vec2 l = f - p0;
-    vec2 d = p1 - p0;
+float og_distanceToLine(vec3 f, vec3 p0, vec3 p1) {
+    vec3 l = f - p0;
+    vec3 d = p1 - p0;
 
-    vec2 p = p0 + (d * (dot(l, d) / dot(d, d)));
+    vec3 p = p0 + (d * (dot(l, d) / dot(d, d)));
     return distance(f, p);
 }
 
 void main() {
-	vec2 p0 = windowPosition[0];
-    vec2 p1 = windowPosition[1];
-    vec2 p2 = windowPosition[2];
+	//vec3 p0 = inData[0].vert;
+    //vec3 p1 = inData[1].vert;
+    //vec3 p2 = inData[2].vert;
+
+    vec3 p0 = gl_in[0].gl_Position.xyz;
+    vec3 p1 = gl_in[1].gl_Position.xyz;
+    vec3 p2 = gl_in[2].gl_Position.xyz;
 
     for (int i = 0; i < 3; i++) {
         
         outData.vert = inData[i].vert;
         outData.norm = inData[i].norm;
         outData.text = inData[i].text;
-    
+        
         gl_Position = gl_in[i].gl_Position;
 		if (i == 0) {
 			distanceToEdges = vec3(og_distanceToLine(p0, p1, p2), 0.0, 0.0);
@@ -180,7 +201,7 @@ out VD {
 	vec2 text;
 } outData;
 
-out vec2 windowPosition;
+noperspective out vec2 windowPosition;
 
 void main() {
     outData.vert = in_position;
@@ -194,6 +215,6 @@ void main() {
     outData.norm = (modelRot * in_normal).xyz;
     outData.text = in_texcoord_0;
     gl_Position = m_vp * m_model * vec4(in_position, 1.0);
-    windowPosition = gl_Position.xy;
+    windowPosition = in_position.xy;
 }
 '''

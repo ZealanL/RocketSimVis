@@ -39,6 +39,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
     gl_version = (4, 0)
     window_size = (WINDOW_SIZE_X, WINDOW_SIZE_Y)
     title = "RocketSimVis"
+    samples = 2
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -96,6 +97,8 @@ class RocketSimVisWindow(mglw.WindowConfig):
         self.ribbon_vbo = self.ctx.buffer(self.ribbon_verts.astype('f4'))
         self.ribbon_vao = self.ctx.simple_vertex_array(self.prog, self.ribbon_vbo, "in_position")
 
+        self.ctx.multisample = True
+
         print("Done.")
 
     def load_make_vao(self, model_name):
@@ -116,7 +119,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
                 -right[0], -right[1], -right[2], 0,
                 up[0], up[1], up[2], 0,
                 pos[0], pos[1], pos[2], 1
-            ]) * pyrr.Matrix44.from_scale(Vector3((1, 1, 1)) * scale)
+            ]) * scale
 
         self.m_model.write(model_mat.astype('f4'))
 
@@ -352,11 +355,13 @@ class RocketSimVisWindow(mglw.WindowConfig):
                         Vector4((1, 0.9, 0.4, 1))
                     )
 
-        self.ctx.wireframe = True
+        #self.render_model(None, None, None, self.vao_arena, self.t_boostpad, 1)
+
+        #self.ctx.wireframe = True
         self.enable_arena_coloring.value = True
-        self.render_model(None, None, None, self.vao_arena, self.t_boost_glow)
+        self.render_model(None, None, None, self.vao_arena, self.t_none, 1, Vector4((1,1,1,1)))
         self.enable_arena_coloring.value = False
-        self.ctx.wireframe = False
+        #self.ctx.wireframe = False
 
         # Render black matte behind
         # TODO: Makes lines aliased

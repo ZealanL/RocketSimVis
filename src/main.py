@@ -184,7 +184,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
         # TODO: Make configurable params
         CAM_DISTANCE = 270
         CAM_HEIGHT = 120
-        CAM_FOV = 90
+        CAM_FOV = 80
 
         CAM_LEAN_HEIGHT_SCALE = 1.0
         CAM_LEAN_DIST_SCALE = 0.4
@@ -202,7 +202,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
                 cam_dir = (target_pos - car_pos).normalized
 
                 # As we tilt up, move the camera down
-                lean_scale = max(cam_dir.z, 0)
+                lean_scale = cam_dir.z
                 height_clamp = abs(target_pos.z - car_pos.z) / CAM_LEAN_MIN_HEIGHT_CLAMP
                 height *= 1 - min(lean_scale * CAM_LEAN_HEIGHT_SCALE, height_clamp)
 

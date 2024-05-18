@@ -57,11 +57,11 @@ class RocketSimVisWindow(mglw.WindowConfig):
             geometry_shader=GEOM_SHADER
         )
 
-        self.m_vp = self.prog['m_vp']
-        self.m_model = self.prog['m_model']
-        self.globalColor = self.prog['globalColor']
-        self.enable_arena_coloring = self.prog['enableArenaColoring']
-        self.camera_pos = self.prog['cameraPos']
+        self.pr_m_vp = self.prog['m_vp']
+        self.pr_m_model = self.prog['m_model']
+        self.pr_global_color = self.prog['globalColor']
+        self.pr_enable_arena_coloring = self.prog['enableArenaColoring']
+        self.pr_camera_pos = self.prog['cameraPos']
 
         ##########################################
 
@@ -121,11 +121,11 @@ class RocketSimVisWindow(mglw.WindowConfig):
                 pos[0], pos[1], pos[2], 1
             ]) * scale
 
-        self.m_model.write(model_mat.astype('f4'))
+        self.pr_m_model.write(model_mat.astype('f4'))
 
         if global_color is None:
             global_color = Vector4((0, 0, 0, 0))
-        self.globalColor.write(global_color.astype('f4'))
+        self.pr_global_color.write(global_color.astype('f4'))
 
         if texture is not None:
             texture.use()
@@ -237,7 +237,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
         interp_interval = max(state.recv_interval, 1e-6)
         interp_ratio = min(max((cur_time - state.recv_time) / interp_interval, 0), 1)
 
-        self.enable_arena_coloring.value = False
+        self.pr_enable_arena_coloring.value = False
 
         self.ctx.clear(0, 0, 0)
         self.ctx.enable(moderngl.DEPTH_TEST)
@@ -259,8 +259,8 @@ class RocketSimVisWindow(mglw.WindowConfig):
             (0.0, 0.0, 1.0),
         )
 
-        self.camera_pos.write(camera_pos.astype('f4'))
-        self.m_vp.write((proj * lookat).astype('f4'))
+        self.pr_camera_pos.write(camera_pos.astype('f4'))
+        self.pr_m_vp.write((proj * lookat).astype('f4'))
 
         if not (state.boost_pad_states is None): # Render boost pads
             for i in range(len(state.boost_pad_states)):
@@ -358,9 +358,9 @@ class RocketSimVisWindow(mglw.WindowConfig):
         #self.render_model(None, None, None, self.vao_arena, self.t_boostpad, 1)
 
         #self.ctx.wireframe = True
-        self.enable_arena_coloring.value = True
+        self.pr_enable_arena_coloring.value = True
         self.render_model(None, None, None, self.vao_arena, self.t_none, 1, Vector4((1,1,1,1)))
-        self.enable_arena_coloring.value = False
+        self.pr_enable_arena_coloring.value = False
         #self.ctx.wireframe = False
 
         # Render black matte behind

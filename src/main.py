@@ -44,8 +44,8 @@ class RocketSimVisWindow(mglw.WindowConfig):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        self.ball_cam_idx = 0
-
+        self.spectate_count = 0
+        self.spectate_idx = 0
         self.prev_interp_ratio = 0
 
         ##########################################
@@ -115,7 +115,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
         model = self.load_scene(DATA_DIR_PATH + "/" + model_name)
         return model.root_nodes[0].mesh.vao.instance(self.prog if (program is None) else self.prog_arena)
 
-    def render_model(self, pos, forward, up, model_vao, texture, scale = 1.0, global_color = None):
+    def render_model(self, pos, forward, up, model_vao, texture, scale = 1.0, global_color = None, mode = moderngl.TRIANGLES):
         if pos is None:
             model_mat = Matrix44.identity()
         else:
@@ -143,7 +143,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
         else:
             self.t_none.use()
 
-        model_vao.render()
+        model_vao.render(mode)
 
     def render_ribbon(self, ribbon: RibbonEmitter, camera_pos, lifetime, width, start_taper_time, color):
         if len(ribbon.points) == 0:
@@ -205,13 +205,13 @@ class RocketSimVisWindow(mglw.WindowConfig):
         CAM_LEAN_DIST_EXP = 1.0
         CAM_LEAN_MIN_HEIGHT_CLAMP = 300
 
-        if self.ball_cam_idx > -1:
-            if len(state.car_states) > self.ball_cam_idx:
+        if self.spectate_idx > -1:
+            if len(state.car_states) > self.spectate_idx:
 
                 height = CAM_HEIGHT
                 dist = CAM_DISTANCE
 
-                car_pos = state.car_states[self.ball_cam_idx].phys.get_pos(interp_ratio)
+                car_pos = state.car_states[self.spectate_idx].phys.get_pos(interp_ratio)
 
                 cam_dir = (target_pos - car_pos).normalized
 
@@ -237,6 +237,8 @@ class RocketSimVisWindow(mglw.WindowConfig):
                 global_state_manager.state.ball_state.rotate_with_ang_vel(delta_time)
 
             state = copy.deepcopy(global_state_manager.state)
+
+        self.spectate_count = len(state.car_states)
 
         while len(self.car_ribbons) != len(state.car_states):
             if len(self.car_ribbons) < len(state.car_states):
@@ -382,6 +384,16 @@ class RocketSimVisWindow(mglw.WindowConfig):
         #self.render_model(None, None, None, self.vao_arena, self.t_black, arena_matte_scale)
 
         self.prev_interp_ratio = interp_ratio
+
+    ####################################################
+
+    def mouse_press_event(self, x, y, button):
+        if self.spectate_count == 0:
+            return
+
+        self.spectate_idx += 1;
+        if self.spectate_idx >= self.spectate_count:
+            self.spectate_idx = -1
 
 ''' TODO: Breaks moderngl?
 arg_parser = argparse.ArgumentParser(

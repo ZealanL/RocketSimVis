@@ -125,6 +125,7 @@ in FD {
 out vec4 f_color;
 
 void main() { 
+    float distFromCam = length(cameraPos - inData.vert);
     vec3 normFromCam = normalize(cameraPos - inData.vert);
     float fresnelRatio = clamp(1 - dot(normFromCam, inData.norm), 0, 1);
     
@@ -164,7 +165,11 @@ void main() {
     bool isVibrantColor = hsv[1] > 0.8f;
     if (isVibrantColor) {
         // Make vibrant colors less affected by lighting and "pop" more
-        f_color = f_color*0.7 + vertColor*0.3;
+        float distScale = 1 - (1 / ( 1 + (distFromCam / 900))); 
+        distScale = 0;
+        float vibrantScale = 0.2 + (0.7 * distScale);
+        
+        f_color = f_color*(1-vibrantScale) + vertColor*vibrantScale;
     }
 
     if (vertColor.a != 1) {

@@ -198,11 +198,11 @@ class RocketSimVisWindow(mglw.WindowConfig):
         # TODO: Make configurable params
         CAM_DISTANCE = 270
         CAM_HEIGHT = 120
-        CAM_FOV = 80
+        CAM_FOV = 75
         CAM_BIRD_FOV = 60
 
         CAM_LEAN_HEIGHT_SCALE = 1.0
-        CAM_LEAN_DIST_SCALE = 0.4
+        CAM_LEAN_DIST_SCALE = 0.2
         CAM_LEAN_DIST_EXP = 1.0
         CAM_LEAN_MIN_HEIGHT_CLAMP = 300
 

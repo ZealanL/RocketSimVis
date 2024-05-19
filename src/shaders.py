@@ -17,42 +17,47 @@ in vec3 distanceToEdges;
 out vec4 f_color;
 
 void main() { 
-    vec4 orange = vec4(1, 0.5, 0, 1);
-    vec4 blue = vec4(0, 0.3, 1, 1);
+    bool isFloor = inData.norm.z > 0.95;
+    bool isCeil = inData.norm.z < -0.95;
+    
     float ratio = clamp((inData.vert.y + 0.01) / 6000, -1, 1);
-    vec3 arenaCol = vec3(0, 0.5, 0);
 
+    float brightness = 0;
+    float colRatio = 0.2 + sqrt(abs(ratio)) * 0.8;
+    colRatio *= 0.75;
+    
+    vec3 arenaCol = vec3(0, 0, 0);
     if (ratio > 0) {
-        ratio = sqrt(ratio);
-        arenaCol.r = ratio;
-        arenaCol.g = ratio/1.9;
+        arenaCol.r = colRatio;
+        arenaCol.g = colRatio * 0.60;
     } else if (ratio < 0) {
-        ratio = sqrt(-ratio);
-        arenaCol.b = ratio;
-        arenaCol.g = ratio/3;
+        arenaCol.b = colRatio;
+        arenaCol.g = colRatio * 0.55;
     }
 
-    float min_col_val = 0.2;
+    float min_col_val = 0.3;
     arenaCol.r = max(arenaCol.r, min_col_val);
     arenaCol.g = max(arenaCol.g, min_col_val);
     arenaCol.b = max(arenaCol.b, min_col_val);
 
     // Prevent color from becoming too dark when gray
-    arenaCol = normalize(arenaCol) * max(length(arenaCol), 0.4);
-
-    arenaCol.xyz *= 0.85;
+    arenaCol = normalize(arenaCol) * max(length(arenaCol), 0.6);
 
     f_color = vec4(arenaCol.x, arenaCol.y, arenaCol.z, 1);
 
     float min_edge_dist = min(distanceToEdges.x, min(distanceToEdges.y, distanceToEdges.z));
     //f_color *= 1 / (1 + min_edge_dist * 0.2);
 
-    float edge_ratio = 1 * float(min_edge_dist < 10);
+    float edge_ratio = 0.95 * float(min_edge_dist < 10);
+    if (isFloor || isCeil)
+        edge_ratio *= 0.7;
+    
     float backlight = abs(inData.norm.y * 0.7 + inData.norm.x * 0.3) * 0.6 + 0.4;
-    float light_ratio = min(backlight * 0.4 + max(0, inData.norm.z) * 0.3, 1);
+    float light_ratio = min(backlight * 0.4 + (max(0, inData.norm.z)) * 0.2, 1);
 
     f_color.xyz *= light_ratio + edge_ratio * (1 - light_ratio);
     f_color.a = 1;
+    f_color *= (1 + brightness);
 
     float ball_radius = 100;
     float circle_width = 10;
@@ -124,9 +129,8 @@ void main() {
     float fresnelRatio = clamp(1 - dot(normFromCam, inData.norm), 0, 1);
     
     /* New experimental lighting that sucks
-    vec4 baseColor = texture(Texture, inData.text).rgba;
-    
     vec3 hsv = rgb2hsv(baseColor.xyz);
+    vec4 baseColor = texture(Texture, inData.text).rgba;
     //hsv[0] = mod(hsv[0] - 0.05, 1);
     vec4 baseColorShifted = vec4(hsv2rgb(hsv), baseColor[3]);
     
@@ -143,6 +147,7 @@ void main() {
     */
     
     vec4 vertColor = texture(Texture, inData.text).rgba;
+    vec3 hsv = rgb2hsv(vertColor.xyz);
     vec3 sunLightDir = normalize(vec3(-0.3, 0.2, -1)) + normFromCam * 0.0001;
     vec3 sunLightColor = vec3(1, 1, 0.8);
             
@@ -156,10 +161,16 @@ void main() {
     float finalExp = 0.9;
     f_color = vec4(pow(baseColor, vec3(finalExp, finalExp, finalExp)), vertColor[3]);
 
+    bool isVibrantColor = hsv[1] > 0.8f;
+    if (isVibrantColor) {
+        // Make vibrant colors less affected by lighting and "pop" more
+        f_color = f_color*0.7 + vertColor*0.3;
+    }
+
     if (vertColor.a != 1) {
         f_color = vertColor;
     }
-
+    
     if (globalColor != vec4(0,0,0,0)) {
         f_color = globalColor;
     }

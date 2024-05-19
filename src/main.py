@@ -51,17 +51,27 @@ class RocketSimVisWindow(mglw.WindowConfig):
         ##########################################
 
         print("Initializing shaders...")
+
         self.prog = self.ctx.program(
             vertex_shader=VERT_SHADER,
             fragment_shader=FRAG_SHADER,
             geometry_shader=GEOM_SHADER
         )
 
+        self.prog_arena = self.ctx.program(
+            vertex_shader=VERT_SHADER,
+            fragment_shader=FRAG_SHADER_ARENA,
+            geometry_shader=GEOM_SHADER
+        )
+
         self.pr_m_vp = self.prog['m_vp']
         self.pr_m_model = self.prog['m_model']
         self.pr_global_color = self.prog['globalColor']
-        self.pr_enable_arena_coloring = self.prog['enableArenaColoring']
         self.pr_camera_pos = self.prog['cameraPos']
+
+        self.pra_m_vp = self.prog_arena['m_vp']
+        self.pra_m_model = self.prog_arena['m_model']
+        self.pra_ball_pos = self.prog_arena['ballPos']
 
         ##########################################
 
@@ -70,7 +80,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
 
         print("Data path:", DATA_DIR_PATH)
         print("Loading models and textures...")
-        self.vao_arena = self.load_make_vao("ArenaMeshCustom.obj")
+        self.vao_arena = self.load_make_vao("ArenaMeshCustom.obj", self.prog_arena)
 
         self.vao_octane = self.load_make_vao("Octane.obj")
         self.vao_ball = self.load_make_vao("Ball.obj")
@@ -101,11 +111,11 @@ class RocketSimVisWindow(mglw.WindowConfig):
 
         print("Done.")
 
-    def load_make_vao(self, model_name):
+    def load_make_vao(self, model_name, program = None):
         model = self.load_scene(DATA_DIR_PATH + "/" + model_name)
-        return model.root_nodes[0].mesh.vao.instance(self.prog)
+        return model.root_nodes[0].mesh.vao.instance(self.prog if (program is None) else self.prog_arena)
 
-    def render_model(self, pos, forward, up, model_vao, texture, scale = 1.0, global_color = None, mode = moderngl.TRIANGLES):
+    def render_model(self, pos, forward, up, model_vao, texture, scale = 1.0, global_color = None):
         if pos is None:
             model_mat = Matrix44.identity()
         else:
@@ -122,6 +132,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
             ]) * scale
 
         self.pr_m_model.write(model_mat.astype('f4'))
+        self.pra_m_model.write(model_mat.astype('f4'))
 
         if global_color is None:
             global_color = Vector4((0, 0, 0, 0))
@@ -132,7 +143,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
         else:
             self.t_none.use()
 
-        model_vao.render(mode)
+        model_vao.render()
 
     def render_ribbon(self, ribbon: RibbonEmitter, camera_pos, lifetime, width, start_taper_time, color):
         if len(ribbon.points) == 0:
@@ -237,7 +248,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
         interp_interval = max(state.recv_interval, 1e-6)
         interp_ratio = min(max((cur_time - state.recv_time) / interp_interval, 0), 1)
 
-        self.pr_enable_arena_coloring.value = False
+        #self.pr_enable_arena_coloring.value = False
 
         self.ctx.clear(0, 0, 0)
         self.ctx.enable(moderngl.DEPTH_TEST)
@@ -261,6 +272,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
 
         self.pr_camera_pos.write(camera_pos.astype('f4'))
         self.pr_m_vp.write((proj * lookat).astype('f4'))
+        self.pra_m_vp.write((proj * lookat).astype('f4'))
 
         if not (state.boost_pad_states is None): # Render boost pads
             for i in range(len(state.boost_pad_states)):
@@ -355,12 +367,13 @@ class RocketSimVisWindow(mglw.WindowConfig):
                         Vector4((1, 0.9, 0.4, 1))
                     )
 
-        #self.render_model(None, None, None, self.vao_arena, self.t_boostpad, 1)
+
 
         #self.ctx.wireframe = True
-        self.pr_enable_arena_coloring.value = True
+        #self.pr_enable_arena_coloring.value = True
+        self.pra_ball_pos.write(state.ball_state.get_pos(interp_ratio).astype('f4'))
         self.render_model(None, None, None, self.vao_arena, self.t_none, 1, Vector4((1,1,1,1)))
-        self.pr_enable_arena_coloring.value = False
+        #self.pr_enable_arena_coloring.value = False
         #self.ctx.wireframe = False
 
         # Render black matte behind

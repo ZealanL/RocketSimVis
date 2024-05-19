@@ -199,6 +199,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
         CAM_DISTANCE = 270
         CAM_HEIGHT = 120
         CAM_FOV = 80
+        CAM_BIRD_FOV = 60
 
         CAM_LEAN_HEIGHT_SCALE = 1.0
         CAM_LEAN_DIST_SCALE = 0.4
@@ -228,7 +229,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
 
                 pos = car_pos + cam_offset
 
-        return pos, target_pos, CAM_FOV
+        return pos, target_pos, (CAM_FOV if (self.spectate_idx >= 0) else CAM_BIRD_FOV)
 
     def render(self, total_time, delta_time):
 

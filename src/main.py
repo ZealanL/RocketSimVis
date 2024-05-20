@@ -10,6 +10,7 @@ import pyrr.vector3
 
 from const import *
 from shaders import *
+from arena_shaders import *
 from socket_listener import SocketListener
 from state_manager import *
 from ribbon import *
@@ -27,7 +28,6 @@ import moderngl_window as mglw
 
 import pywavefront
 
-
 # Makes Y up instead of Z
 def yup(v):
     v = Vector3(v)
@@ -44,7 +44,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.ctx
+
         self.spectate_count = 0
         self.spectate_idx = 0
         self.prev_interp_ratio = 0
@@ -56,14 +56,23 @@ class RocketSimVisWindow(mglw.WindowConfig):
         self.prog = self.ctx.program(
             vertex_shader=VERT_SHADER,
             fragment_shader=FRAG_SHADER,
-            geometry_shader=GEOM_SHADER
         )
 
         self.prog_arena = self.ctx.program(
-            vertex_shader=VERT_SHADER,
-            fragment_shader=FRAG_SHADER_ARENA,
-            geometry_shader=GEOM_SHADER
+            vertex_shader=ARENA_VERT_SHADER,
+            fragment_shader=ARENA_FRAG_SHADER,
+            geometry_shader=ARENA_GEOM_SHADER
         )
+
+        '''
+        # Make destination texture for lazy supersampling
+        self.super_texture = self.ctx.texture((self.window_size[0] * 2, self.window_size[1] * 2), 4)
+        self.super_texture.repeat_x = False
+        self.super_texture.repeat_y = False
+        self.super_framebuf = self.ctx.framebuffer(
+            color_attachments=[self.super_texture],
+        )
+        '''
 
         self.outline_renderer = OutlineRenderer(self.ctx, self.window_size)
 
@@ -107,12 +116,16 @@ class RocketSimVisWindow(mglw.WindowConfig):
 
         ############################################
 
+        # Make ribbon mesh
         self.ribbon_max_verts = 100
         self.ribbon_verts = np.random.randn(self.ribbon_max_verts * 3) * 1000
         self.ribbon_vbo = self.ctx.buffer(self.ribbon_verts.astype('f4'))
         self.ribbon_vao = self.ctx.simple_vertex_array(self.prog, self.ribbon_vbo, "in_position")
         self.vaos['ribbon'] = self.ribbon_vao
 
+        ############################################
+
+        # Enable multisampling
         self.ctx.multisample = True
 
         print("Done.")
@@ -276,9 +289,8 @@ class RocketSimVisWindow(mglw.WindowConfig):
         self.ctx.front_face = "ccw"
         self.ctx.enable(moderngl.CULL_FACE)
 
-        glEnable(GL_LINE_SMOOTH)
-        glHint(GL_LINE_SMOOTH_HINT, GL_NICEST)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA) # Normal blending
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR) # Use linear interpolation of pixels for supersampling
 
         camera_pos, camera_target_pos, camera_fov = self.calc_camera_state(state, interp_ratio)
 

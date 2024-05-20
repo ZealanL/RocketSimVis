@@ -59,6 +59,9 @@ class OutlineRenderer:
         # Use additive blending, this way darker outlines are dimmer and don't actually darken
         glBlendFunc(GL_SRC_ALPHA, GL_ONE)
 
+        # No depth
+        glDisable(GL_DEPTH_TEST)
+
         self.write_mats(Matrix44.identity(), Matrix44.identity())
         self.offscreen_texture.use()
         self.quad.render(self.prog_blur)

@@ -13,6 +13,7 @@ from shaders import *
 from socket_listener import SocketListener
 from state_manager import *
 from ribbon import *
+from outline_renderer import OutlineRenderer
 
 import moderngl
 from OpenGL.GL import *
@@ -43,7 +44,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
+        self.ctx
         self.spectate_count = 0
         self.spectate_idx = 0
         self.prev_interp_ratio = 0
@@ -64,6 +65,8 @@ class RocketSimVisWindow(mglw.WindowConfig):
             geometry_shader=GEOM_SHADER
         )
 
+        self.outline_renderer = OutlineRenderer(self.ctx, self.window_size)
+
         self.pr_m_vp = self.prog['m_vp']
         self.pr_m_model = self.prog['m_model']
         self.pr_global_color = self.prog['globalColor']
@@ -80,15 +83,17 @@ class RocketSimVisWindow(mglw.WindowConfig):
 
         print("Data path:", DATA_DIR_PATH)
         print("Loading models and textures...")
-        self.vao_arena = self.load_make_vao("ArenaMeshCustom.obj", self.prog_arena)
 
-        self.vao_octane = self.load_make_vao("Octane.obj")
-        self.vao_ball = self.load_make_vao("Ball.obj")
+        self.vaos = {}
+        self.load_vao("ArenaMeshCustom.obj", self.prog_arena)
 
-        self.vaos_boost_pad = [
-            [ self.load_make_vao("BoostPad_Small_0.obj"), self.load_make_vao("BoostPad_Small_1.obj")],
-            [ self.load_make_vao("BoostPad_Big_0.obj"), self.load_make_vao("BoostPad_Big_1.obj") ]
-        ]
+        self.load_vao("Octane.obj")
+        self.load_vao("Ball.obj")
+
+        self.load_vao("BoostPad_Small_0.obj")
+        self.load_vao("BoostPad_Small_1.obj")
+        self.load_vao("BoostPad_Big_0.obj")
+        self.load_vao("BoostPad_Big_1.obj")
 
         self.ts_octane = [
             self.load_texture_2d(DATA_DIR_PATH + "T_Octane_B.png"),
@@ -106,16 +111,18 @@ class RocketSimVisWindow(mglw.WindowConfig):
         self.ribbon_verts = np.random.randn(self.ribbon_max_verts * 3) * 1000
         self.ribbon_vbo = self.ctx.buffer(self.ribbon_verts.astype('f4'))
         self.ribbon_vao = self.ctx.simple_vertex_array(self.prog, self.ribbon_vbo, "in_position")
+        self.vaos['ribbon'] = self.ribbon_vao
 
         self.ctx.multisample = True
 
         print("Done.")
 
-    def load_make_vao(self, model_name, program = None):
+    def load_vao(self, model_name, program = None):
         model = self.load_scene(DATA_DIR_PATH + "/" + model_name)
-        return model.root_nodes[0].mesh.vao.instance(self.prog if (program is None) else self.prog_arena)
+        self.vaos[model_name] = model.root_nodes[0].mesh.vao.instance(self.prog if (program is None) else program)
+        self.outline_renderer.load_vao(model_name, model)
 
-    def render_model(self, pos, forward, up, model_vao, texture, scale = 1.0, global_color = None, mode = moderngl.TRIANGLES):
+    def render_model(self, pos, forward, up, model_name, texture, scale = 1.0, global_color = None, mode = moderngl.TRIANGLES, outline_color: Vector3 = None):
         if pos is None:
             model_mat = Matrix44.identity()
         else:
@@ -143,7 +150,14 @@ class RocketSimVisWindow(mglw.WindowConfig):
         else:
             self.t_none.use()
 
-        model_vao.render(mode)
+        self.wnd.use()
+        self.vaos[model_name].render(mode)
+
+        if outline_color is not None:
+            self.outline_renderer.use_framebuf()
+            self.outline_renderer.pr_m_model.write(model_mat.astype('f4'))
+            self.outline_renderer.pr_color.write(Vector4((outline_color.x, outline_color.y, outline_color.z, 1)).astype('f4'))
+            self.outline_renderer.vaos[model_name].render(mode)
 
     def render_ribbon(self, ribbon: RibbonEmitter, camera_pos, lifetime, width, start_taper_time, color):
         if len(ribbon.points) == 0:
@@ -185,7 +199,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
         glDisable(GL_CULL_FACE)
         self.render_model(
             None, None, None,
-            self.ribbon_vao, self.t_none, 20,
+            "ribbon", self.t_none, 20,
             color,
             moderngl.TRIANGLE_STRIP
         )
@@ -252,7 +266,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
         interp_interval = max(state.recv_interval, 1e-6)
         interp_ratio = min(max((cur_time - state.recv_time) / interp_interval, 0), 1)
 
-        #self.pr_enable_arena_coloring.value = False
+        self.outline_renderer.clear()
 
         self.ctx.clear(0, 0, 0)
         self.ctx.enable(moderngl.DEPTH_TEST)
@@ -264,6 +278,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
 
         glEnable(GL_LINE_SMOOTH)
         glHint(GL_LINE_SMOOTH_HINT, GL_NICEST)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA) # Normal blending
 
         camera_pos, camera_target_pos, camera_fov = self.calc_camera_state(state, interp_ratio)
 
@@ -277,6 +292,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
         self.pr_camera_pos.write(camera_pos.astype('f4'))
         self.pr_m_vp.write((proj * lookat).astype('f4'))
         self.pra_m_vp.write((proj * lookat).astype('f4'))
+        self.outline_renderer.pr_m_vp.write((proj * lookat).astype('f4'))
 
         if not (state.boost_pad_states is None): # Render boost pads
             for i in range(len(state.boost_pad_states)):
@@ -287,9 +303,14 @@ class RocketSimVisWindow(mglw.WindowConfig):
                 pos = state.boost_pad_locations[i].copy()
                 pos.z = 0
 
+                model_name = "BoostPad"
+                model_name += "_Big" if is_big else "_Small_"
+                model_name += "1" if is_active else "0"
+                model_name += ".obj"
+
                 self.render_model(
                     pos, Vector3((1, 0, 0)), Vector3((0, 0, 1)),
-                    self.vaos_boost_pad[int(is_big)][int(is_active)],
+                    model_name,
                     self.t_boostpad,
                     3,
                 )
@@ -300,7 +321,9 @@ class RocketSimVisWindow(mglw.WindowConfig):
             ball_pos = ball_phys.get_pos(interp_ratio)
             self.render_model(
                 ball_pos,
-                ball_phys.get_forward(interp_ratio), ball_phys.get_up(interp_ratio), self.vao_ball, self.t_ball
+                ball_phys.get_forward(interp_ratio), ball_phys.get_up(interp_ratio), 'Ball.obj', self.t_ball,
+
+                #outline_color = Vector4((1, 1, 1, 1))
             )
 
             if True: # Update and render ball ribbon
@@ -341,9 +364,12 @@ class RocketSimVisWindow(mglw.WindowConfig):
                 car_pos = car_state.phys.get_pos(interp_ratio)
                 car_forward = car_state.phys.get_forward(interp_ratio)
                 car_up = car_state.phys.get_up(interp_ratio)
+                outline_brightness = 1 - (1 / (1 + (car_pos - camera_pos).length / 1000))
                 self.render_model(
                     car_pos,
-                    car_forward, car_up, self.vao_octane, self.ts_octane[car_state.team_num]
+                    car_forward, car_up, 'Octane.obj', self.ts_octane[car_state.team_num],
+
+                    outline_color = (Vector3((0, 0.5, 1)) if (car_state.team_num == 0) else Vector3((1, 0.5, 0))) * outline_brightness
                 )
 
                 if True: # Update and render car ribbon
@@ -372,18 +398,10 @@ class RocketSimVisWindow(mglw.WindowConfig):
                     )
 
 
-
-        #self.ctx.wireframe = True
-        #self.pr_enable_arena_coloring.value = True
         self.pra_ball_pos.write(state.ball_state.get_pos(interp_ratio).astype('f4'))
-        self.render_model(None, None, None, self.vao_arena, self.t_none, 1, Vector4((1,1,1,1)))
-        #self.pr_enable_arena_coloring.value = False
-        #self.ctx.wireframe = False
+        self.render_model(None, None, None, 'ArenaMeshCustom.obj', self.t_none, 1, Vector4((1,1,1,1)))
 
-        # Render black matte behind
-        # TODO: Makes lines aliased
-        #arena_matte_scale = 1.02 # Shift back slightly to fix z fighting
-        #self.render_model(None, None, None, self.vao_arena, self.t_black, arena_matte_scale)
+        self.outline_renderer.render_quad()
 
         self.prev_interp_ratio = interp_ratio
 

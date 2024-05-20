@@ -219,13 +219,14 @@ class RocketSimVisWindow(mglw.WindowConfig):
                 # As we tilt up, move the camera down
                 lean_scale = cam_dir.z
                 height_clamp = abs(target_pos.z - car_pos.z) / CAM_LEAN_MIN_HEIGHT_CLAMP
-                height *= 1 - min(lean_scale * CAM_LEAN_HEIGHT_SCALE, height_clamp)
+                if lean_scale > 0:
+                    height *= 1 - min(lean_scale * CAM_LEAN_HEIGHT_SCALE, height_clamp)
 
-                # As we tilt up, move the camera closer
-                dist *= 1 - pow(lean_scale, CAM_LEAN_DIST_EXP) * CAM_LEAN_DIST_SCALE
+                    # As we tilt up, move the camera closer
+                    dist *= 1 - pow(lean_scale, CAM_LEAN_DIST_EXP) * CAM_LEAN_DIST_SCALE
 
                 cam_offset = cam_dir * Vector3((-1, -1, 0)) * dist
-                cam_offset.z +=height
+                cam_offset.z += height
 
                 pos = car_pos + cam_offset
 

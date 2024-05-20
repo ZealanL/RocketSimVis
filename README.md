@@ -1,4 +1,4 @@
-# RocketSimVis
+# RocketSimVis Python
 My Python visualizer for [RocketSim](https://github.com/ZealanL/RocketSim)
 
 The goal of this visualizer is to be as easy to set up and use as possible, while still looking nice.

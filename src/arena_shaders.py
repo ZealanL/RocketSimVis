@@ -10,9 +10,8 @@ in FD {
 	vec3 vert;
 	vec3 norm;
 	vec2 text;
+	float edgeFrac;
 } inData;
-
-in vec3 distanceToEdges;
 
 out vec4 f_color;
 
@@ -20,22 +19,24 @@ void main() {
     bool isFloor = inData.norm.z > 0.95;
     bool isCeil = inData.norm.z < -0.95;
 
-    float ratio = clamp((inData.vert.y + 0.01) / 6000, -1, 1);
+    float minRatio = 0.1f;
+    float ratio = clamp((inData.vert.y + 1e-1) / 6000, -1, 1);
+    if (abs(ratio) < minRatio)
+        ratio = minRatio * sign(ratio);
 
-    float brightness = 0;
     float colRatio = 0.2 + sqrt(abs(ratio)) * 0.8;
     colRatio *= 0.75;
 
     vec3 arenaCol = vec3(0, 0, 0);
     if (ratio > 0) {
         arenaCol.r = colRatio;
-        arenaCol.g = colRatio * 0.60;
+        arenaCol.g = colRatio * 0.65;
     } else if (ratio < 0) {
         arenaCol.b = colRatio;
-        arenaCol.g = colRatio * 0.55;
+        arenaCol.g = colRatio * 0.675;
     }
 
-    float min_col_val = 0.3;
+    float min_col_val = 0.35;
     arenaCol.r = max(arenaCol.r, min_col_val);
     arenaCol.g = max(arenaCol.g, min_col_val);
     arenaCol.b = max(arenaCol.b, min_col_val);
@@ -45,19 +46,15 @@ void main() {
 
     f_color = vec4(arenaCol.x, arenaCol.y, arenaCol.z, 1);
 
-    float min_edge_dist = min(distanceToEdges.x, min(distanceToEdges.y, distanceToEdges.z));
-    //f_color *= 1 / (1 + min_edge_dist * 0.2);
-
-    float edge_ratio = 0.95 * float(min_edge_dist < 10);
+    float edge_ratio = float(inData.edgeFrac);
     if (isFloor || isCeil)
         edge_ratio *= 0.7;
 
-    float backlight = abs(inData.norm.y * 0.7 + inData.norm.x * 0.3) * 0.6 + 0.4;
+    float backlight = abs(abs(inData.norm.y) * 0.7 + abs(inData.norm.x) * 0.3) * 0.6 + 0.4;
     float light_ratio = min(backlight * 0.4 + (max(0, inData.norm.z)) * 0.2, 1);
 
     f_color.xyz *= light_ratio + edge_ratio * (1 - light_ratio);
     f_color.a = 1;
-    f_color *= (1 + brightness);
 
     float ball_radius = 100;
     float circle_width = 10;
@@ -83,8 +80,6 @@ void main() {
                 f_color += vec4(1, 1, 1, 1) * 0.25 * height_ratio;
         }
     }
-
-    //gl_FragDepth += 1e-7;
 }
  '''
 
@@ -93,7 +88,10 @@ ARENA_GEOM_SHADER = '''
 
 layout (triangles) in;
 layout (triangle_strip) out;
-layout (max_vertices = 3) out;
+layout (max_vertices = 21) out;
+
+uniform mat4 m_vp;
+uniform mat4 m_model;
 
 in VD {
 	vec3 vert;
@@ -105,6 +103,7 @@ out FD {
 	vec3 vert;
 	vec3 norm;
 	vec2 text;
+	float edgeFrac;
 } outData;
 
 out vec3 distanceToEdges;
@@ -118,31 +117,135 @@ float og_distanceToLine(vec3 f, vec3 p0, vec3 p1) {
 }
 
 void main() {
-	//vec3 p0 = inData[0].vert;
-    //vec3 p1 = inData[1].vert;
-    //vec3 p2 = inData[2].vert;
-
-    vec3 p0 = gl_in[0].gl_Position.xyz;
-    vec3 p1 = gl_in[1].gl_Position.xyz;
-    vec3 p2 = gl_in[2].gl_Position.xyz;
-
+    vec3 p[3];
+    for (int i = 0; i < 3; i++)
+        p[i] = inData[i].vert;
+    
+    float wireframeWidth = 15; 
+    bool doWireframe = true;
+    
+    // Minimum size of the 3 edges
+    float minEdgeSize = 10;
+    float edgeSize = min(length(p[0]-p[1]), min(length(p[1]-p[2]), length(p[2]-p[0])));
+    if (edgeSize < minEdgeSize)
+        doWireframe = false;
+        
+    wireframeWidth = min(wireframeWidth, edgeSize * 2);
+        
+    // Aveage position of the triangle
+    vec3 center = (p[0] + p[1] + p[2]) / 3;
+    
+    // Inner points
+    vec3 ip[3];
     for (int i = 0; i < 3; i++) {
-
-        outData.vert = inData[i].vert;
-        outData.norm = inData[i].norm;
-        outData.text = inData[i].text;
-
-        gl_Position = gl_in[i].gl_Position;
-		if (i == 0) {
-			distanceToEdges = vec3(og_distanceToLine(p0, p1, p2), 0.0, 0.0);
-		} else if (i == 1) {
-			distanceToEdges = vec3(0.0, og_distanceToLine(p1, p2, p0), 0.0);
-		} else {
-			distanceToEdges = vec3(0.0, 0.0, og_distanceToLine(p2, p0, p1));
-		}
-        EmitVertex();
+        vec3 vert = inData[i].vert;
+    
+        vec3 deltaToCenter = center - vert;
+        float distToCenter = length(deltaToCenter);
+        vec3 dirToCenter = deltaToCenter / distToCenter;
+        if (distToCenter < 1e-5)
+            dirToCenter = vec3(0, 0, 0);
+                
+        vert += dirToCenter * wireframeWidth;
+        ip[i] = vert;
     }
-    //EndPrimitive();
+    
+    if (doWireframe) {
+        vec3 norm = (inData[0].norm + inData[1].norm + inData[2].norm) / 3;
+        vec2 text = (inData[0].text + inData[1].text + inData[2].text) / 3;
+        outData.norm = norm;
+        outData.text = text;
+        
+        outData.edgeFrac = 0;
+        {
+            for (int i = 0; i < 3; i++) {
+                
+                outData.vert = ip[i];
+                
+                gl_Position = m_vp * m_model * vec4(outData.vert, 1);
+                
+                EmitVertex();
+            }
+            EndPrimitive();
+        }
+    
+        outData.edgeFrac = 1;
+        {
+            vec3 ovs[4*3];
+            for (int i = 0; i < 3; i++) {
+                ovs[i*4 + 0] = p[(0 + i) % 3];
+                ovs[i*4 + 1] = ip[(0 + i) % 3];
+                ovs[i*4 + 2] = p[(2 + i) % 3];
+                ovs[i*4 + 3] = ip[(2 + i) % 3];
+            }
+            
+            for (int i = 0; i < 3; i++) {
+                for (int j = 0; j < 4; j++) {
+                    outData.vert = ovs[i * 4 + j];
+                    
+                    gl_Position = m_vp * m_model * vec4(outData.vert, 1);
+                    
+                    EmitVertex();
+                }
+                EndPrimitive();
+            }
+        }
+    } else {
+        for (int i = 0; i < 3; i++) {
+            
+            outData.vert = inData[i].vert;
+            outData.norm = inData[i].norm;
+            outData.text = inData[i].text;
+            outData.edgeFrac = 0;
+            
+            gl_Position = m_vp * m_model * vec4(p[i], 1);
+            
+            EmitVertex();
+        }
+        EndPrimitive();
+    }
+    
+    /*
+    for (int itr = 0; itr < 2; itr++) {
+        if (!doWireframe && itr == 0)
+            continue;
+    
+        for (int i = 0; i < 3; i++) {
+    
+            vec3 vert = inData[i].vert;
+    
+            vec3 deltaToCenter = center - vert;
+            float distToCenter = length(deltaToCenter);
+            vec3 dirToCenter = deltaToCenter / distToCenter;
+            if (distToCenter < 1e-5)
+                dirToCenter = vec3(0, 0, 0);
+            
+            if (doWireframe && itr == 0) {
+                vert += dirToCenter * wireframeWidth;
+            }
+            
+            outData.vert = vert;
+            outData.norm = inData[i].norm;
+            outData.text = inData[i].text;
+            outData.edgeFrac = float(itr == 1);
+    
+            gl_Position = m_vp * m_model * vec4(vert, 1);
+            if (itr == 1) {
+                gl_Position.z += 1e-2;
+            }
+            
+            if (i == 0) {
+                distanceToEdges = vec3(og_distanceToLine(p[0], p[1], p[2]), 0.0, 0.0);
+            } else if (i == 1) {
+                distanceToEdges = vec3(0.0, og_distanceToLine(p[1], p[2], p[0]), 0.0);
+            } else {
+                distanceToEdges = vec3(0.0, 0.0, og_distanceToLine(p[2], p[0], p[1]));
+            }
+            EmitVertex();
+        }
+        EndPrimitive();
+    }
+    */
 }
 '''
 

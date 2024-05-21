@@ -40,7 +40,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
     gl_version = (4, 0)
     window_size = (WINDOW_SIZE_X, WINDOW_SIZE_Y)
     title = "RocketSimVis"
-    samples = 2
+    samples = 4
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -125,8 +125,8 @@ class RocketSimVisWindow(mglw.WindowConfig):
 
         ############################################
 
-        # Enable multisampling
-        self.ctx.multisample = True
+        # Auto-enable multisampling if we have multiple samples
+        self.ctx.multisample = self.samples > 1
 
         print("Done.")
 
@@ -381,7 +381,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
                     car_pos,
                     car_forward, car_up, 'Octane.obj', self.ts_octane[car_state.team_num],
 
-                    outline_color = (Vector3((0, 0.5, 1)) if (car_state.team_num == 0) else Vector3((1, 0.5, 0))) * outline_brightness
+                    #outline_color = (Vector3((0, 0.5, 1)) if (car_state.team_num == 0) else Vector3((1, 0.5, 0))) * outline_brightness
                 )
 
                 if True: # Update and render car ribbon

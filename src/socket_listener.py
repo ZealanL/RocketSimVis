@@ -4,6 +4,7 @@ import state_manager
 import json
 
 import time
+import traceback
 
 class SocketListener:
     def __init__(self):
@@ -25,15 +26,27 @@ class SocketListener:
 
             has_received: True
 
-            j = json.loads(data.decode("utf-8"))
+            try:
+                j = json.loads(data.decode("utf-8"))
+            except:
+                print("ERROR parsing received text to JSON:")
+                traceback.print_exc()
+                j = None
 
-            recv_time = time.time()
+            if not (j is None):
+                recv_time = time.time()
 
-            with state_manager.global_state_mutex:
-                state_manager.global_state_manager.state.read_from_json(j)
-                state_manager.global_state_manager.state.recv_time = recv_time
-                state_manager.global_state_manager.state.recv_interval = recv_time - prev_recv_time
+                with state_manager.global_state_mutex:
+                    try:
+                        state_manager.global_state_manager.state.read_from_json(j)
+                    except:
+                        print("ERROR reading received JSON:")
+                        traceback.print_exc()
 
-            prev_recv_time = time.time()
+                    state_manager.global_state_manager.state.recv_time = recv_time
+                    state_manager.global_state_manager.state.recv_interval = recv_time - prev_recv_time
+
+                prev_recv_time = time.time()
+
     def stop_async(self):
         self.should_run = False

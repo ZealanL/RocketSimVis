@@ -6,8 +6,6 @@ import sys
 import argparse
 import copy
 
-import pyrr.vector3
-
 from const import *
 from shaders import *
 from arena_shaders import *
@@ -142,14 +140,18 @@ class RocketSimVisWindow(mglw.WindowConfig):
             pos = Vector3(pos)
             forward = Vector3(forward)
             up = Vector3(up)
-            right = pyrr.vector3.cross(forward, up)
+            right = Vector3(pyrr.vector3.cross(forward, up))
+
+            forward *= scale
+            right *= scale
+            up *= scale
 
             model_mat = Matrix44([
                 forward[0], forward[1], forward[2], 0,
                 -right[0], -right[1], -right[2], 0,
                 up[0], up[1], up[2], 0,
                 pos[0], pos[1], pos[2], 1
-            ]) * scale
+            ])
 
         self.pr_m_model.write(model_mat.astype('f4'))
         self.pra_m_model.write(model_mat.astype('f4'))
@@ -316,7 +318,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
                 pos.z = 0
 
                 model_name = "BoostPad"
-                model_name += "_Big" if is_big else "_Small_"
+                model_name += "_Big_" if is_big else "_Small_"
                 model_name += "1" if is_active else "0"
                 model_name += ".obj"
 

@@ -39,7 +39,7 @@ The format for the gamestate, in pseudo-JSON, is:
 				"boost": <v>, "jump": <v>, "handbrake": <v>, 
 			},
 			
-			"boost_amount": <v>,
+			"boost_amount": <v> (from 0 to 1),
 			"on_ground": <bool>,
 			OPTIONAL "has_flipped_or_double_jumped": <bool>,
 			"is_demoed": <bool>

@@ -1,11 +1,26 @@
 # RocketSimVis Python
 My Python visualizer for [RocketSim](https://github.com/ZealanL/RocketSim)
 
-The goal of this visualizer is to be as easy to set up and use as possible, while still looking nice.
+![image](https://github.com/ZealanL/RocketSimVis/assets/36944229/3112e332-da79-4c09-90b6-e2bb0fcbd559)
+
+The goal of this visualizer is to be as easy to set up and use as possible, while also looking nice and simple.
 
 This project has no RocketSim dependencies and uses custom-made low-poly meshes for cars, the ball, boost pads, and the arena.
 
-![rocketsimvis](https://github.com/ZealanL/RocketSimVis/assets/36944229/644f618a-88de-409f-9722-a4ddcd4b490e)
+Features:
+- Clean low-poly style with entirely custom models
+- Smooth interpolation for any update rate
+- Boost and ball trails
+- Clear vibrant team colors to make seeing cars easier
+- Ball circle on the ground below the ball
+- Player camera switching with additional static stadium camera
+- No dependencies apart from `requirements.txt`
+
+Roadmap (Planned Features):
+- Simple player nameplates
+- Jump and flip particles
+- Freecam camera option
+- Small UI section with debug info
 
 ## Installation with rlgym_sim/RLGym-PPO
 1. Clone this repo and install the dependencies in `requirements.txt`
@@ -19,10 +34,14 @@ import rocketsimvis_rlgym_sim_client
 # Custom render function for the envs to use RocketSimVis
 def custom_render(self): 
     rocketsimvis_rlgym_sim_client.send_data_to_rsvis(self._prev_state)
-	
-# Hook it to the env after `rlgym_sim.make()` is called
-env = rlgym_sim.make(...)
-type(env).render = custom_render
+
+...
+
+def build_rocketsim_env():
+    ...	
+    # Hook it to the env after `rlgym_sim.make()` is called
+    env = rlgym_sim.make(...)
+    type(env).render = custom_render
 
 # That's it!
 ```

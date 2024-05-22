@@ -7,6 +7,29 @@ This project has no RocketSim dependencies and uses custom-made low-poly meshes 
 
 ![rocketsimvis](https://github.com/ZealanL/RocketSimVis/assets/36944229/644f618a-88de-409f-9722-a4ddcd4b490e)
 
+## Installation with rlgym_sim/RLGym-PPO
+1. Clone this repo and install the dependencies in `requirements.txt`
+2. Copy the `rocketsimvis_rlgym_sim_client.py` file into the same directory you run rlgym_sim/RLGym-PPO in
+3. Connect it to the rlgym_sim env(s):
+```py
+import rocketsimvis_rlgym_sim_client
+
+...
+
+# Custom render function for the envs to use RocketSimVis
+def custom_render(self): 
+    rocketsimvis_rlgym_sim_client.send_data_to_rsvis(self._prev_state)
+	
+# Hook it to the env after `rlgym_sim.make()` is called
+env = rlgym_sim.make(...)
+type(env).render = custom_render
+
+# That's it!
+```
+
+## Running the visualizer
+Just run `MAIN.bat` (if on Windows), or `main.py`.
+
 ## Is This Official?
 No, there are many other cool visualizers available for RocketSim, I just thought I'd make mine open-source for those who want it.
 

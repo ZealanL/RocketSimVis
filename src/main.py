@@ -383,7 +383,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
                 #outline_color = Vector4((1, 1, 1, 1))
             )
 
-            if True: # Update and render ball ribbon
+            if False: # Update and render ball ribbon
                 ball_speed = ball_phys.get_vel(interp_ratio).length
                 speed_frac = (max(0, min(1, ball_speed / 2800)) ** 2)
                 ribbon_alpha = 0.75

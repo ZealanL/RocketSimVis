@@ -33,7 +33,7 @@ import rocketsimvis_rlgym_sim_client
 
 # Custom render function for the envs to use RocketSimVis
 def custom_render(self): 
-    rocketsimvis_rlgym_sim_client.send_data_to_rsvis(self._prev_state)
+    rocketsimvis_rlgym_sim_client.send_state_to_rocketsimvis(self._prev_state)
 
 ...
 

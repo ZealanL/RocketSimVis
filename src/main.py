@@ -46,6 +46,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
         self.spectate_count = 0
         self.spectate_idx = 0
         self.prev_interp_ratio = 0
+        self.car_cam_time = 0
 
         ##########################################
 
@@ -220,46 +221,88 @@ class RocketSimVisWindow(mglw.WindowConfig):
         )
         glEnable(GL_CULL_FACE)
 
-    def calc_camera_state(self, state, interp_ratio):
+    def calc_camera_state(self, state, interp_ratio, delta_time):
         pos = Vector3((-4000, 0, 1000))
-        target_pos = state.ball_state.get_pos(interp_ratio)
+        ball_pos = state.ball_state.get_pos(interp_ratio)
 
         # TODO: Make configurable params
-        CAM_DISTANCE = 270
+        CAM_DISTANCE = 300
         CAM_HEIGHT = 120
         CAM_FOV = 75
         CAM_BIRD_FOV = 60
 
         CAM_LEAN_HEIGHT_SCALE = 1.0
-        CAM_LEAN_DIST_SCALE = 0.2
+        CAM_LEAN_DIST_SCALE = 0.4
         CAM_LEAN_DIST_EXP = 1.0
         CAM_LEAN_MIN_HEIGHT_CLAMP = 300
 
-        if self.spectate_idx > -1:
-            if len(state.car_states) > self.spectate_idx:
+        cam_dir = (ball_pos - pos).normalized
 
+        if self.spectate_idx > -1 and len(state.car_states) > self.spectate_idx:
+            car_pos = state.car_states[self.spectate_idx].phys.get_pos(interp_ratio)
+            car_vel = state.car_states[self.spectate_idx].phys.get_vel(interp_ratio)
+            car_forward = state.car_states[self.spectate_idx].phys.get_forward(interp_ratio)
+
+            # Calculate ball cam
+            if True:
                 height = CAM_HEIGHT
                 dist = CAM_DISTANCE
 
-                car_pos = state.car_states[self.spectate_idx].phys.get_pos(interp_ratio)
-
-                cam_dir = (target_pos - car_pos).normalized
+                ball_cam_offset_dir = ((ball_pos - car_pos).normalized * Vector3((1, 1, 0))).normalized
 
                 # As we tilt up, move the camera down
-                lean_scale = cam_dir.z
-                height_clamp = abs(target_pos.z - car_pos.z) / CAM_LEAN_MIN_HEIGHT_CLAMP
+                lean_scale = (ball_pos - car_pos).normalized.z
+                height_clamp = abs(ball_pos.z - car_pos.z) / CAM_LEAN_MIN_HEIGHT_CLAMP
                 if lean_scale > 0:
                     height *= 1 - min(lean_scale * CAM_LEAN_HEIGHT_SCALE, height_clamp)
 
                     # As we tilt up, move the camera closer
                     dist *= 1 - pow(lean_scale, CAM_LEAN_DIST_EXP) * CAM_LEAN_DIST_SCALE
 
-                cam_offset = cam_dir * Vector3((-1, -1, 0)) * dist
-                cam_offset.z += height
+                ball_cam_offset = -ball_cam_offset_dir * dist
+                ball_cam_offset.z += height
 
-                pos = car_pos + cam_offset
+                ball_cam_pos = car_pos + ball_cam_offset
+                ball_cam_dir = (ball_pos - ball_cam_pos).normalized
 
-        return pos, target_pos, (CAM_FOV if (self.spectate_idx >= 0) else CAM_BIRD_FOV)
+            # Calculate car cam dir
+            if True:
+                car_cam_dir = (car_vel * Vector3((1, 1, 0))).normalized
+                car_cam_offset = -car_cam_dir * CAM_DISTANCE
+                car_cam_offset.z = CAM_HEIGHT
+                car_cam_pos = car_pos + car_cam_offset
+
+            # Determine if dribbling
+            car_ball_delta = ball_pos - car_pos
+            dribbling = False
+            if car_vel.length > 500:
+                if car_ball_delta.z > 90 and car_ball_delta.z < 200:
+                    if (car_ball_delta * Vector3((1, 1, 0))).length < 135:
+                        if ball_pos.z < 300:
+                            dribbling = True
+
+            car_cam_start_delay = 0.25
+            car_cam_max_time = 0.65
+            car_cam_inc_speed = 0.8
+            car_cam_dec_speed = 0.5
+            if car_ball_delta.length > 1000:
+                car_cam_dec_speed *= 2 # Speed up when ball moved away quickly
+
+            if dribbling:
+                self.car_cam_time += car_cam_inc_speed * delta_time
+            else:
+                self.car_cam_time = min(self.car_cam_time, car_cam_max_time)
+                self.car_cam_time = max(0, self.car_cam_time - car_cam_dec_speed * delta_time)
+
+            # TODO: Auto car-cam is annoying, activates at bad times
+            car_cam_ratio = np.clip((self.car_cam_time - car_cam_start_delay) / (car_cam_max_time - car_cam_start_delay), 0, 1)
+
+            pos = ball_cam_pos*(1-car_cam_ratio) + car_cam_pos*car_cam_ratio
+            cam_dir = (ball_cam_dir*(1-car_cam_ratio) + car_cam_dir*car_cam_ratio).normalized
+        else:
+            self.car_cam_time = 0
+
+        return pos, pos + cam_dir, (CAM_FOV if (self.spectate_idx >= 0) else CAM_BIRD_FOV)
 
     def render(self, total_time, delta_time):
 
@@ -294,7 +337,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA) # Normal blending
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR) # Use linear interpolation of pixels for supersampling
 
-        camera_pos, camera_target_pos, camera_fov = self.calc_camera_state(state, interp_ratio)
+        camera_pos, camera_target_pos, camera_fov = self.calc_camera_state(state, interp_ratio, delta_time)
 
         proj = Matrix44.perspective_projection(camera_fov, self.aspect_ratio, 0.1, 50 * 1000.0)
         lookat = Matrix44.look_at(
@@ -326,7 +369,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
                     pos, Vector3((1, 0, 0)), Vector3((0, 0, 1)),
                     model_name,
                     self.t_boostpad,
-                    3,
+                    2.5,
                 )
 
 
@@ -341,7 +384,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
             )
 
             if True: # Update and render ball ribbon
-                ball_speed = ball_phys.vel.length
+                ball_speed = ball_phys.get_vel(interp_ratio).length
                 speed_frac = (max(0, min(1, ball_speed / 2800)) ** 2)
                 ribbon_alpha = 0.75
                 ribbon_lifetime = 0.8

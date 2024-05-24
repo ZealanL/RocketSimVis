@@ -26,7 +26,8 @@ class PhysState:
         self.next_up: Vector3 = Vector3((0, 0, 1))
 
         self.has_rot: bool = False
-        self.vel: Vector3 = Vector3((0, 0, 0))
+        self.prev_vel: Vector3 = Vector3((0, 0, 0))
+        self.next_vel: Vector3 = Vector3((0, 0, 0))
         self.ang_vel: Vector3 = Vector3((0, 0, 0))
 
     def rotate_with_ang_vel(self, delta_time: float):
@@ -75,7 +76,8 @@ class PhysState:
         else:
             self.has_rot = False
 
-        self.vel = Vector3(j["vel"])
+        self.prev_vel = self.next_vel
+        self.next_vel = Vector3(j["vel"])
         self.ang_vel = Vector3(j["ang_vel"])
 
     def is_teleporting(self):
@@ -87,6 +89,12 @@ class PhysState:
             return self.prev_pos + (self.next_pos - self.prev_pos)*interp_ratio
         else:
             return self.prev_pos
+
+    def get_vel(self, interp_ratio):
+        if not self.is_teleporting():
+            return self.prev_vel + (self.next_vel - self.prev_vel)*interp_ratio
+        else:
+            return self.prev_vel
 
     def get_forward(self, interp_ratio):
         if self.has_rot:

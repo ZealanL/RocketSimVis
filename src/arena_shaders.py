@@ -1,7 +1,7 @@
 # TODO: Having them hardcoded in strings kinda sucks for editing complex shaders
 
 ARENA_FRAG_SHADER = '''
-#version 400
+#version 330
 
 uniform sampler2D Texture;
 uniform vec3 ballPos;
@@ -84,7 +84,7 @@ void main() {
  '''
 
 ARENA_GEOM_SHADER = '''
-#version 400
+#version 330
 
 layout (triangles) in;
 layout (triangle_strip) out;
@@ -250,7 +250,7 @@ void main() {
 '''
 
 ARENA_VERT_SHADER = '''
-#version 400
+#version 330
 
 uniform mat4 m_vp;
 uniform mat4 m_model;

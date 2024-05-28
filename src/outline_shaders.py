@@ -1,6 +1,8 @@
 # All are modified versions of http://www.geoffprewett.com/blog/software/opengl-outline/index.html
 
 UNLIT_VERT_SHADER = '''
+#version 330
+
 uniform mat4 m_vp;
 uniform mat4 m_model;
 
@@ -12,15 +14,22 @@ void main() {
 '''
 
 UNLIT_FRAG_SHADER = '''
+#version 330
+
 uniform vec4 color;
+
+out vec4 out_color;
+
 void main() {
-        gl_FragColor = color;
+    out_color = color;
 }
 '''
 
 BLUR_VERT_SHADER = '''
+#version 330
+
 in vec2 in_position;
-varying vec2 texCoord;
+out vec2 texCoord;
 void main() {
     texCoord = in_position;
     // pos ranges from [(0, 0), (1, 1)], so we need to convert to OpenGL’s
@@ -30,10 +39,14 @@ void main() {
 '''
 
 BLUR_FRAG_SHADER = '''
+#version 330
+
 uniform sampler2D texture;
 
 uniform vec2 pixelSize;
-varying vec2 texCoord;
+in vec2 texCoord;
+
+out vec4 out_color;
 
 void main()
 {
@@ -74,6 +87,6 @@ void main()
     }
     
     color.a *= a;
-    gl_FragColor = color;
+    out_color = color;
 }
 '''

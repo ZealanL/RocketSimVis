@@ -1,7 +1,7 @@
 # TODO: Having them hardcoded in strings kinda sucks for editing complex shaders
 
 FRAG_SHADER = '''
-#version 400
+#version 330
 
 // https://stackoverflow.com/questions/15095909/from-rgb-to-hsv-in-opengl-glsl
 // All components are in the range [0...1], including hue.
@@ -96,7 +96,7 @@ void main() {
  '''
 
 VERT_SHADER = '''
-#version 400
+#version 330
 
 uniform mat4 m_vp;
 uniform mat4 m_model;

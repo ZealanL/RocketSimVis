@@ -232,7 +232,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
         CAM_BIRD_FOV = 60
 
         CAM_LEAN_HEIGHT_SCALE = 1.0
-        CAM_LEAN_DIST_SCALE = 0.4
+        CAM_LEAN_DIST_SCALE = 0.0 # Disabled for now
         CAM_LEAN_DIST_EXP = 1.0
         CAM_LEAN_MIN_HEIGHT_CLAMP = 300
 
@@ -261,6 +261,9 @@ class RocketSimVisWindow(mglw.WindowConfig):
 
                 ball_cam_offset = -ball_cam_offset_dir * dist
                 ball_cam_offset.z += height
+
+                # Make sure we are actually of the correct distance
+                ball_cam_offset = ball_cam_offset.normalized * dist
 
                 ball_cam_pos = car_pos + ball_cam_offset
                 ball_cam_dir = (ball_pos - ball_cam_pos).normalized

@@ -4,3 +4,4 @@ PyOpenGL
 pyrr
 numpy
 pywavefront
+pyqt5

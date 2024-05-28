@@ -15,6 +15,15 @@ from ribbon import *
 from outline_renderer import OutlineRenderer
 
 import moderngl
+import moderngl_window
+import moderngl_window.loaders.scene.wavefront as wvf
+from moderngl_window import resources
+from moderngl_window.meta import TextureDescription
+
+from PyQt5 import QtOpenGL, QtWidgets
+from PyQt5.QtCore import QSize, Qt, QTimer
+from PyQt5.QtGui import QScreen
+
 from OpenGL.GL import *
 from OpenGL.GLU import *
 
@@ -22,35 +31,55 @@ import numpy as np
 
 from pyrr import Quaternion, Matrix33, Matrix44, Vector3, Vector4
 
-import moderngl_window as mglw
-
 import pywavefront
 
-# Makes Y up instead of Z
-def yup(v):
-    v = Vector3(v)
-    old_y = v.y
-    v.y = v.z
-    v.z = old_y
-    return v
+class QRSVGLWidget(QtOpenGL.QGLWidget):
+    def __init__(self, screen: QScreen):
+        self.samples = 4
 
-class RocketSimVisWindow(mglw.WindowConfig):
-    gl_version = (4, 0)
-    window_size = (WINDOW_SIZE_X, WINDOW_SIZE_Y)
-    title = "RocketSimVis"
-    samples = 4
+        ########################################################################
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        fmt = QtOpenGL.QGLFormat()
+        fmt.setVersion(3, 3)
+        fmt.setProfile(QtOpenGL.QGLFormat.CoreProfile)
+        fmt.setDepthBufferSize(24)
+        fmt.setStencilBufferSize(8)
+        fmt.setDoubleBuffer(True)
+        fmt.setSwapInterval(1)
+
+        if self.samples > 1:
+            fmt.setSampleBuffers(True)
+            fmt.setSamples(int(self.samples))
+
+        super(QRSVGLWidget, self).__init__(fmt, None)
+
+        self.setMouseTracking(True)
+
+        screen_frame_time = 1 / screen.refreshRate()
+
+        # Set update timer
+        print("Setting update rate: {}hz".format(int(screen.refreshRate())))
+        self.update_timer = QTimer()
+        self.update_timer.timeout.connect(self.repaint)
+        self.update_timer.setInterval(int(screen_frame_time * 1000))
+        self.update_timer.start()
+
+    def load_texture_2d(self, path: str) -> moderngl.Texture:
+        return resources.textures.load(TextureDescription(path=path))
+
+    def initializeGL(self):
+        self.ctx = moderngl.create_context()
+        moderngl_window.activate_context(None, self.ctx)
 
         self.spectate_count = 0
         self.spectate_idx = 0
         self.prev_interp_ratio = 0
         self.car_cam_time = 0
+        self.last_render_time = time.time()
 
         ##########################################
 
-        print("Initializing shaders...")
+        print("Creating shader programs...")
 
         self.prog = self.ctx.program(
             vertex_shader=VERT_SHADER,
@@ -73,8 +102,10 @@ class RocketSimVisWindow(mglw.WindowConfig):
         )
         '''
 
-        self.outline_renderer = OutlineRenderer(self.ctx, self.window_size)
+        print("Creating outline renderer...")
+        self.outline_renderer = OutlineRenderer(self.ctx, (self.width(), self.height())) # TODO: Fix resizing bugs
 
+        print("Linking shader varaibles...")
         self.pr_m_vp = self.prog['m_vp']
         self.pr_m_model = self.prog['m_model']
         self.pr_global_color = self.prog['globalColor']
@@ -127,10 +158,13 @@ class RocketSimVisWindow(mglw.WindowConfig):
         # Auto-enable multisampling if we have multiple samples
         self.ctx.multisample = self.samples > 1
 
+        ############################################
+
         print("Done.")
 
     def load_vao(self, model_name, program = None):
-        model = self.load_scene(DATA_DIR_PATH + "/" + model_name)
+        loader = wvf.Loader(wvf.SceneDescription(path = DATA_DIR_PATH + "/" + model_name))
+        model = loader.load()
         self.vaos[model_name] = model.root_nodes[0].mesh.vao.instance(self.prog if (program is None) else program)
         self.outline_renderer.load_vao(model_name, model)
 
@@ -166,7 +200,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
         else:
             self.t_none.use()
 
-        self.wnd.use()
+        self.ctx.screen.use()
         self.vaos[model_name].render(mode)
 
         if outline_color is not None:
@@ -307,8 +341,16 @@ class RocketSimVisWindow(mglw.WindowConfig):
 
         return pos, pos + cam_dir, (CAM_FOV if (self.spectate_idx >= 0) else CAM_BIRD_FOV)
 
-    def render(self, total_time, delta_time):
+    def paintGL(self):
+        width, height = self.width(), self.height()
+        self.ctx.viewport = (0, 0, width, height)
 
+        cur_time = time.time()
+        delta_time = cur_time - self.last_render_time
+        self.render(cur_time, delta_time, width, height)
+        self.last_render_time = cur_time
+
+    def render(self, total_time, delta_time, width, height):
         with global_state_mutex:
             if not global_state_manager.state.ball_state.has_rot:
                 global_state_manager.state.ball_state.rotate_with_ang_vel(delta_time)
@@ -342,7 +384,7 @@ class RocketSimVisWindow(mglw.WindowConfig):
 
         camera_pos, camera_target_pos, camera_fov = self.calc_camera_state(state, interp_ratio, delta_time)
 
-        proj = Matrix44.perspective_projection(camera_fov, self.aspect_ratio, 0.1, 50 * 1000.0)
+        proj = Matrix44.perspective_projection(camera_fov, width/height, 0.1, 50 * 1000.0)
         lookat = Matrix44.look_at(
             camera_pos,
             camera_target_pos,
@@ -467,21 +509,26 @@ class RocketSimVisWindow(mglw.WindowConfig):
 
     ####################################################
 
-    def mouse_press_event(self, x, y, button):
-        if self.spectate_count == 0:
-            return
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            if self.spectate_count == 0:
+                return
 
-        self.spectate_idx += 1;
-        if self.spectate_idx >= self.spectate_count:
-            self.spectate_idx = -1
+            self.spectate_idx += 1;
+            if self.spectate_idx >= self.spectate_count:
+                self.spectate_idx = -1
 
-''' TODO: Breaks moderngl?
-arg_parser = argparse.ArgumentParser(
-                    prog='RocketSimVis',
-                    description='Python visualizer for RocketSim games',
-                    epilog='')
-arg_parser.add_argument("-p", "--port")
-'''
+class QRSVWindow(QtWidgets.QMainWindow):
+    def __init__(self, screen: QScreen):
+        super().__init__()
+
+        self.setWindowTitle("RocketSimVis")
+
+        # Set the central widget of the Window.
+        self.gl_widget = QRSVGLWidget(screen)
+        self.setCentralWidget(self.gl_widget)
+
+        self.resize(WINDOW_SIZE_X, WINDOW_SIZE_Y)
 
 g_socket_listener = None
 def run_socket_thread(port):
@@ -500,7 +547,12 @@ def main():
     socket_thread.start()
 
     print("Starting visualizer window...")
-    RocketSimVisWindow.run()
+
+    app = QtWidgets.QApplication([])
+
+    window = QRSVWindow(app.primaryScreen())
+    window.showNormal()
+    app.exec_()
 
     print("Shutting down...")
     g_socket_listener.stop_async()

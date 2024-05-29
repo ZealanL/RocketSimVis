@@ -189,8 +189,8 @@ class GameState:
             self.boost_pad_locations.append(Vector3(t))
         self.boost_pad_states = None
 
-        self.recv_time = time.time()
-        self.recv_interval = 0
+        self.recv_time = -1
+        self.recv_interval = -1
 
     def is_boost_big(self, idx):
         return self.boost_pad_locations[idx].z == 73

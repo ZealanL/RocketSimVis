@@ -13,6 +13,7 @@ from socket_listener import SocketListener
 from state_manager import *
 from ribbon import *
 from outline_renderer import OutlineRenderer
+from ui import get_ui, QUIBarWidget
 
 import moderngl
 import moderngl_window
@@ -22,7 +23,7 @@ from moderngl_window.meta import TextureDescription
 
 from PyQt5 import QtOpenGL, QtWidgets
 from PyQt5.QtCore import QSize, Qt, QTimer
-from PyQt5.QtGui import QScreen
+from PyQt5.QtGui import QScreen, QColor
 
 from OpenGL.GL import *
 from OpenGL.GLU import *
@@ -33,6 +34,7 @@ from pyrr import Quaternion, Matrix33, Matrix44, Vector3, Vector4
 
 import pywavefront
 
+# TODO: Move game logic out of here
 class QRSVGLWidget(QtOpenGL.QGLWidget):
     def __init__(self, screen: QScreen):
         self.samples = 4
@@ -103,7 +105,8 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
         '''
 
         print("Creating outline renderer...")
-        self.outline_renderer = OutlineRenderer(self.ctx, (self.width(), self.height())) # TODO: Fix resizing bugs
+        #self.outline_renderer = OutlineRenderer(self.ctx, (self.width(), self.height())) # TODO: Fix resizing bugs
+        self.outline_renderer = None # Disabled due to weird shader compilation issues
 
         print("Linking shader varaibles...")
         self.pr_m_vp = self.prog['m_vp']
@@ -166,7 +169,8 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
         loader = wvf.Loader(wvf.SceneDescription(path = DATA_DIR_PATH + "/" + model_name))
         model = loader.load()
         self.vaos[model_name] = model.root_nodes[0].mesh.vao.instance(self.prog if (program is None) else program)
-        self.outline_renderer.load_vao(model_name, model)
+        if not (self.outline_renderer is None):
+            self.outline_renderer.load_vao(model_name, model)
 
     def render_model(self, pos, forward, up, model_name, texture, scale = 1.0, global_color = None, mode = moderngl.TRIANGLES, outline_color: Vector3 = None):
         if pos is None:
@@ -369,7 +373,8 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
         interp_interval = max(state.recv_interval, 1e-6)
         interp_ratio = min(max((cur_time - state.recv_time) / interp_interval, 0), 1)
 
-        self.outline_renderer.clear()
+        if not (self.outline_renderer is None):
+            self.outline_renderer.clear()
 
         self.ctx.clear(0, 0, 0)
         self.ctx.enable(moderngl.DEPTH_TEST)
@@ -394,7 +399,8 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
         self.pr_camera_pos.write(camera_pos.astype('f4'))
         self.pr_m_vp.write((proj * lookat).astype('f4'))
         self.pra_m_vp.write((proj * lookat).astype('f4'))
-        self.outline_renderer.pr_m_vp.write((proj * lookat).astype('f4'))
+        if not (self.outline_renderer is None):
+            self.outline_renderer.pr_m_vp.write((proj * lookat).astype('f4'))
 
         if not (state.boost_pad_states is None): # Render boost pads
             for i in range(len(state.boost_pad_states)):
@@ -503,7 +509,19 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
         self.pra_ball_pos.write(state.ball_state.get_pos(interp_ratio).astype('f4'))
         self.render_model(None, None, None, 'ArenaMeshCustom.obj', self.t_none, 1, Vector4((1,1,1,1)))
 
-        self.outline_renderer.render_quad()
+        if not (self.outline_renderer is None):
+            self.outline_renderer.render_quad()
+
+        ###########################################
+
+        ui_text = ""
+        ui_text += "Connected: {}".format(state.recv_time > 0) + "\n"
+        if state.recv_interval > 0:
+            ui_text += "Network rate: {:.2f}fps".format(1 / state.recv_interval) + "\n"
+        ui_text += "Ball speed: {:.2f}kph".format(state.ball_state.prev_vel.length * (9 / 250)) + "\n"
+        get_ui().set_text(ui_text)
+
+        ###########################################
 
         self.prev_interp_ratio = interp_ratio
 
@@ -527,6 +545,12 @@ class QRSVWindow(QtWidgets.QMainWindow):
         # Set the central widget of the Window.
         self.gl_widget = QRSVGLWidget(screen)
         self.setCentralWidget(self.gl_widget)
+
+        self.base_layout = QtWidgets.QVBoxLayout(self)
+        self.layout().addWidget(QUIBarWidget())
+        #self.setWindowOpacity(0.5)
+        #palette = self.palette()
+        #palette.setColor(self.backgroundRole(), QColor(255, 15, 15))
 
         self.resize(WINDOW_SIZE_X, WINDOW_SIZE_Y)
 

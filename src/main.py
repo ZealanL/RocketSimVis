@@ -13,7 +13,8 @@ from socket_listener import SocketListener
 from state_manager import *
 from ribbon import *
 from outline_renderer import OutlineRenderer
-from ui import get_ui, QUIBarWidget
+from ui import get_ui, QUIBarWidget, QRSVWindow
+from config import Config, ConfigVal
 
 import moderngl
 import moderngl_window
@@ -37,9 +38,18 @@ import pywavefront
 # TODO: Move game logic out of here
 class QRSVGLWidget(QtOpenGL.QGLWidget):
     def __init__(self, screen: QScreen):
-        self.samples = 4
+
+        self.config = Config()
+
+        self.spectate_count = 0
+        self.spectate_idx = 0
+        self.prev_interp_ratio = 0
+        self.car_cam_time = 0
+        self.last_render_time = time.time()
 
         ########################################################################
+
+        self.samples = 4
 
         fmt = QtOpenGL.QGLFormat()
         fmt.setVersion(3, 3)
@@ -70,14 +80,9 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
         return resources.textures.load(TextureDescription(path=path))
 
     def initializeGL(self):
+
         self.ctx = moderngl.create_context()
         moderngl_window.activate_context(None, self.ctx)
-
-        self.spectate_count = 0
-        self.spectate_idx = 0
-        self.prev_interp_ratio = 0
-        self.car_cam_time = 0
-        self.last_render_time = time.time()
 
         ##########################################
 
@@ -263,39 +268,29 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
         pos = Vector3((-4000, 0, 1000))
         ball_pos = state.ball_state.get_pos(interp_ratio)
 
-        # TODO: Make configurable params
-        CAM_DISTANCE = 300
-        CAM_HEIGHT = 120
-        CAM_FOV = 75
-        CAM_BIRD_FOV = 60
-
-        CAM_LEAN_HEIGHT_SCALE = 1.0
-        CAM_LEAN_DIST_SCALE = 0.0 # Disabled for now
-        CAM_LEAN_DIST_EXP = 1.0
-        CAM_LEAN_MIN_HEIGHT_CLAMP = 300
-
         cam_dir = (ball_pos - pos).normalized
 
-        if self.spectate_idx > -1 and len(state.car_states) > self.spectate_idx:
+        is_spectating_car = self.spectate_idx > -1 and len(state.car_states) > self.spectate_idx
+        if is_spectating_car:
             car_pos = state.car_states[self.spectate_idx].phys.get_pos(interp_ratio)
             car_vel = state.car_states[self.spectate_idx].phys.get_vel(interp_ratio)
             car_forward = state.car_states[self.spectate_idx].phys.get_forward(interp_ratio)
 
             # Calculate ball cam
             if True:
-                height = CAM_HEIGHT
-                dist = CAM_DISTANCE
+                height = self.config.camera_height.val
+                dist = self.config.camera_distance.val
 
                 ball_cam_offset_dir = ((ball_pos - car_pos).normalized * Vector3((1, 1, 0))).normalized
 
                 # As we tilt up, move the camera down
                 lean_scale = (ball_pos - car_pos).normalized.z
-                height_clamp = abs(ball_pos.z - car_pos.z) / CAM_LEAN_MIN_HEIGHT_CLAMP
+                height_clamp = abs(ball_pos.z - car_pos.z) / self.config.camera_lean_min_height_clamp.val
                 if lean_scale > 0:
-                    height *= 1 - min(lean_scale * CAM_LEAN_HEIGHT_SCALE, height_clamp)
+                    height *= 1 - min(lean_scale * self.config.camera_lean_height_scale.val, height_clamp)
 
                     # As we tilt up, move the camera closer
-                    dist *= 1 - pow(lean_scale, CAM_LEAN_DIST_EXP) * CAM_LEAN_DIST_SCALE
+                    dist *= 1 - lean_scale * self.config.camera_lean_dist_scale.val
 
                 ball_cam_offset = -ball_cam_offset_dir * dist
                 ball_cam_offset.z += height
@@ -309,15 +304,15 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
             # Calculate car cam dir
             if True:
                 car_cam_dir = (car_vel * Vector3((1, 1, 0))).normalized
-                car_cam_offset = -car_cam_dir * CAM_DISTANCE
-                car_cam_offset.z = CAM_HEIGHT
+                car_cam_offset = -car_cam_dir * self.config.camera_distance.val
+                car_cam_offset.z = self.config.camera_height.val
                 car_cam_pos = car_pos + car_cam_offset
 
             # Determine if dribbling
             car_ball_delta = ball_pos - car_pos
             dribbling = False
             if car_vel.length > 500:
-                if car_ball_delta.z > 90 and car_ball_delta.z < 200:
+                if 90 < car_ball_delta.z < 200:
                     if (car_ball_delta * Vector3((1, 1, 0))).length < 135:
                         if ball_pos.z < 300:
                             dribbling = True
@@ -343,7 +338,7 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
         else:
             self.car_cam_time = 0
 
-        return pos, pos + cam_dir, (CAM_FOV if (self.spectate_idx >= 0) else CAM_BIRD_FOV)
+        return pos, pos + cam_dir, (self.config.camera_fov.val if is_spectating_car else self.config.camera_bird_fov.val)
 
     def paintGL(self):
         width, height = self.width(), self.height()
@@ -536,24 +531,6 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
             if self.spectate_idx >= self.spectate_count:
                 self.spectate_idx = -1
 
-class QRSVWindow(QtWidgets.QMainWindow):
-    def __init__(self, screen: QScreen):
-        super().__init__()
-
-        self.setWindowTitle("RocketSimVis")
-
-        # Set the central widget of the Window.
-        self.gl_widget = QRSVGLWidget(screen)
-        self.setCentralWidget(self.gl_widget)
-
-        self.base_layout = QtWidgets.QVBoxLayout(self)
-        self.layout().addWidget(QUIBarWidget())
-        #self.setWindowOpacity(0.5)
-        #palette = self.palette()
-        #palette.setColor(self.backgroundRole(), QColor(255, 15, 15))
-
-        self.resize(WINDOW_SIZE_X, WINDOW_SIZE_Y)
-
 g_socket_listener = None
 def run_socket_thread(port):
     global g_socket_listener
@@ -574,7 +551,7 @@ def main():
 
     app = QtWidgets.QApplication([])
 
-    window = QRSVWindow(app.primaryScreen())
+    window = QRSVWindow(QRSVGLWidget(app.primaryScreen()))
     window.showNormal()
     app.exec_()
 

@@ -23,7 +23,7 @@ from moderngl_window import resources
 from moderngl_window.meta import TextureDescription
 
 from PyQt5 import QtOpenGL, QtWidgets
-from PyQt5.QtCore import QSize, Qt, QTimer
+from PyQt5.QtCore import QSize, Qt
 from PyQt5.QtGui import QScreen, QColor
 
 from OpenGL.GL import *
@@ -46,6 +46,8 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
         self.prev_interp_ratio = 0
         self.car_cam_time = 0
         self.last_render_time = time.time()
+        self.fps_counter = 0
+        self.last_fps = 0
 
         ########################################################################
 
@@ -66,15 +68,6 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
         super(QRSVGLWidget, self).__init__(fmt, None)
 
         self.setMouseTracking(True)
-
-        screen_frame_time = 1 / screen.refreshRate()
-
-        # Set update timer
-        print("Setting update rate: {}hz".format(int(screen.refreshRate())))
-        self.update_timer = QTimer()
-        self.update_timer.timeout.connect(self.repaint)
-        self.update_timer.setInterval(int(screen_frame_time * 1000))
-        self.update_timer.start()
 
     def load_texture_2d(self, path: str) -> moderngl.Texture:
         return resources.textures.load(TextureDescription(path=path))
@@ -347,7 +340,16 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
         cur_time = time.time()
         delta_time = cur_time - self.last_render_time
         self.render(cur_time, delta_time, width, height)
+
+        self.fps_counter += 1
+
+        if int(cur_time) > int(self.last_render_time):
+            self.last_fps = self.fps_counter
+            self.fps_counter = 2
+
         self.last_render_time = cur_time
+
+        self.update()
 
     def render(self, total_time, delta_time, width, height):
         with global_state_mutex:
@@ -510,6 +512,7 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
         ###########################################
 
         ui_text = ""
+        ui_text += "Render FPS: {}".format(self.last_fps) + "\n"
         ui_text += "Connected: {}".format(state.recv_time > 0) + "\n"
         if state.recv_interval > 0:
             ui_text += "Network rate: {:.2f}fps".format(1 / state.recv_interval) + "\n"

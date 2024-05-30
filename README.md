@@ -24,24 +24,12 @@ Roadmap (Planned Features):
 
 ## Installation with rlgym_sim/RLGym-PPO
 1. Clone this repo and install the dependencies in `requirements.txt`
-2. Copy the `rocketsimvis_rlgym_sim_client.py` file into the same directory you run rlgym_sim/RLGym-PPO in
+2. Copy the `rocketsimvis_rlgym_sim_client.py` file into the same directory you run rlgym-sim/RLGym-PPO in
 3. Connect it to the rlgym_sim env(s):
 ```py
-import rocketsimvis_rlgym_sim_client
-
-...
-
-# Custom render function for the envs to use RocketSimVis
-def custom_render(self): 
-    rocketsimvis_rlgym_sim_client.send_state_to_rocketsimvis(self._prev_state)
-
-...
-
-def build_rocketsim_env():
-    ...	
-    # Hook it to the env after `rlgym_sim.make()` is called
-    env = rlgym_sim.make(...)
-    type(env).render = custom_render
+# Add these lines right after "env = rlgym_sim.make( ..."
+import rocketsimvis_rlgym_sim_client as rsv
+type(env).render = lambda self: rsv.send_state_to_rocketsimvis(self._prev_state)
 
 # That's it!
 ```

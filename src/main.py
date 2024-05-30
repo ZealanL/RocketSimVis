@@ -13,6 +13,7 @@ from socket_listener import SocketListener
 from state_manager import *
 from ribbon import *
 from outline_renderer import OutlineRenderer
+import ui
 from ui import get_ui, QUIBarWidget, QRSVWindow
 from config import Config, ConfigVal
 
@@ -553,6 +554,7 @@ def main():
     print("Starting visualizer window...")
 
     app = QtWidgets.QApplication([])
+    ui.update_scaling_factor(app)
 
     window = QRSVWindow(QRSVGLWidget(app.primaryScreen()))
     window.showNormal()

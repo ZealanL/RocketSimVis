@@ -1,3 +1,5 @@
+import string
+
 from pathlib import Path
 
 import moderngl_window
@@ -5,7 +7,7 @@ import moderngl_window.context.pyqt5.window as qtw
 
 from PyQt5 import QtOpenGL, QtWidgets
 from PyQt5.QtCore import QSize, Qt, QTimer, QRect
-from PyQt5.QtGui import QScreen, QColor
+from PyQt5.QtGui import QScreen, QColor, QFontMetrics
 from PyQt5.Qt import QPainter, QWidget, pyqtSlot, QEvent
 
 from config import Config, ConfigVal
@@ -13,6 +15,37 @@ from config import Config, ConfigVal
 from const import WINDOW_SIZE_X, WINDOW_SIZE_Y
 
 _g_ui_widget = None
+
+_g_scaling_factor = 1
+def update_scaling_factor(app: QtWidgets.QApplication):
+    global _g_scaling_factor
+
+    # Make a test label
+    alphabet = string.ascii_lowercase[:14]
+    test_label = QtWidgets.QLabel(alphabet)
+    test_label.setStyleSheet(app.styleSheet())
+    test_label.ensurePolished()
+
+    font_height = test_label.fontMetrics().height()
+
+    _g_scaling_factor = font_height / 13
+
+    print("Scaling factor updated to", _g_scaling_factor)
+
+def get_scaling_factor():
+    return _g_scaling_factor
+
+def set_target_size(widget: QtWidgets.QWidget):
+    base_size = QSize(*widget.SIZE) * get_scaling_factor()
+    min_size = widget.sizeHint()
+
+    #if widget.layout() is not None:
+    #    min_size = widget.layout().sizeHint()
+    #    min_size += QSize(widget.layout().spacing(), widget.layout().spacing()) * 2
+
+    size = QSize(max(base_size.width(), min_size.width()), max(base_size.height(), min_size.height()))
+    widget.setFixedSize(size)
+    widget.resize(size)
 
 class QConfigVal(QWidget):
     FLOAT_SLIDER_PREC = 100
@@ -32,6 +65,7 @@ class QConfigVal(QWidget):
         self.label = QtWidgets.QLabel("...")
 
         self.slider = QtWidgets.QSlider(Qt.Horizontal, self)
+        self.slider.setFixedHeight(10 * get_scaling_factor())
 
         self.float_mode = (config_val.max - config_val.min) < 10
 
@@ -64,9 +98,7 @@ class QConfigVal(QWidget):
         self.label.setText(self.get_beautified_name() + ": " + str(self.config_val.val))
 
 class QEditConfigWidget(QWidget):
-
-    WIDTH = 300
-    HEIGHT = 500
+    SIZE = (300, 500)
 
     def __init__(self, config: Config):
         QWidget.__init__(self)
@@ -74,17 +106,17 @@ class QEditConfigWidget(QWidget):
         self.setAttribute(Qt.WA_StyledBackground)
         self.setAutoFillBackground(True)
 
-        self.layout = QtWidgets.QVBoxLayout(self)
+        self.setLayout(QtWidgets.QVBoxLayout(self))
 
         self.text_label = QtWidgets.QLabel("Settings:\n")
-        self.layout.addWidget(self.text_label)
+        self.layout().addWidget(self.text_label)
 
         self.config = config
 
         self.camera_group = QtWidgets.QGroupBox("Camera")
         self.camera_group_layout = QtWidgets.QVBoxLayout(self)
         self.camera_group.setLayout(self.camera_group_layout)
-        self.layout.addWidget(self.camera_group)
+        self.layout().addWidget(self.camera_group)
 
         for name, obj in self.config.__dict__.items():
             if isinstance(obj, ConfigVal):
@@ -98,24 +130,22 @@ class QEditConfigWidget(QWidget):
         self.footer_label = QtWidgets.QLabel("\n(Click outside this area to close settings)")
         # TODO: Kinda hacky, ideally use setDisabled(True) and add disabled color to stylesheet?
         self.footer_label.setStyleSheet("color: gray")
-        self.layout.addWidget(self.footer_label)
+        self.layout().addWidget(self.footer_label)
 
-        self.setFixedSize(self.WIDTH, self.HEIGHT)
+        set_target_size(self)
 
+    def update(self):
+        super().update()
 
-
-class QUIBarWidget(QtWidgets.QWidget):
-
-    base_size = (200, 100)
+class QUIBarWidget(QWidget):
+    SIZE = (150, 100)
 
     def __init__(self, parent_window):
-        super().__init__()
+        QWidget.__init__(self)
 
         self.config_edit_popup = None
 
         self.parent_window = parent_window
-
-        self.resize(*QUIBarWidget.base_size)
 
         self.setAttribute(Qt.WA_StyledBackground)
         self.setAutoFillBackground(True)
@@ -131,8 +161,13 @@ class QUIBarWidget(QtWidgets.QWidget):
 
         self.setLayout(vbox)
 
+        set_target_size(self)
+
         global _g_ui_widget
         _g_ui_widget = self
+
+    def update(self):
+        super().update()
 
     @pyqtSlot()
     def on_edit_config(self):

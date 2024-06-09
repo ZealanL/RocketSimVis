@@ -36,7 +36,9 @@ def get_scaling_factor():
     return _g_scaling_factor
 
 def set_target_size(widget: QtWidgets.QWidget):
-    base_size = QSize(*widget.SIZE) * get_scaling_factor()
+    base_size = QSize(*widget.SIZE)
+    base_size.setWidth(round(base_size.width() * get_scaling_factor()))
+    base_size.setHeight(round(base_size.height() * get_scaling_factor()))
     min_size = widget.sizeHint()
 
     #if widget.layout() is not None:
@@ -65,17 +67,17 @@ class QConfigVal(QWidget):
         self.label = QtWidgets.QLabel("...")
 
         self.slider = QtWidgets.QSlider(Qt.Horizontal, self)
-        self.slider.setFixedHeight(10 * get_scaling_factor())
+        self.slider.setFixedHeight(round(10 * get_scaling_factor()))
 
         self.float_mode = (config_val.max - config_val.min) < 10
 
         if self.float_mode:
             self.slider.setRange(0, self.FLOAT_SLIDER_PREC)
             val_frac = (config_val.val - config_val.min) / (config_val.max - config_val.min)
-            self.slider.setValue(val_frac * self.FLOAT_SLIDER_PREC)
+            self.slider.setValue(round(val_frac * self.FLOAT_SLIDER_PREC))
         else:
-            self.slider.setRange(config_val.min, config_val.max)
-            self.slider.setValue(config_val.val)
+            self.slider.setRange(round(config_val.min), round(config_val.max))
+            self.slider.setValue(round(config_val.val))
 
         self.slider.valueChanged.connect(self.on_val_changed)
 

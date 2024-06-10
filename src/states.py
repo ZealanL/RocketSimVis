@@ -192,6 +192,8 @@ class GameState:
         self.recv_time = -1
         self.recv_interval = -1
 
+        self.gamemode = None
+
     def is_boost_big(self, idx):
         return self.boost_pad_locations[idx].z == 73
 
@@ -225,3 +227,8 @@ class GameState:
                        .format(len(self.boost_pad_states), len(self.boost_pad_locations)))
         else:
             self.boost_pad_states = None
+
+        if not (j.get("gamemode") is None):
+            self.gamemode = j["gamemode"].lower()
+        else:
+            self.gamemode = "soccar"

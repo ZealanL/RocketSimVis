@@ -205,6 +205,7 @@ class QRSVWindow(QtWidgets.QMainWindow):
 
         self.resize(WINDOW_SIZE_X, WINDOW_SIZE_Y)
 
+        self.installEventFilter(self)
         self.centralWidget().installEventFilter(self)
 
     def eventFilter(self, obj, event):
@@ -216,6 +217,8 @@ class QRSVWindow(QtWidgets.QMainWindow):
                 if self.edit_config_widget.isVisible():
                     if not (press_pos in self.edit_config_widget.geometry()):
                         self.toggle_edit_config()
+        elif event.type() == QEvent.KeyPress:
+            self.gl_widget.keyPressEvent(event)
 
         return super().eventFilter(obj, event)
 

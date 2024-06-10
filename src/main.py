@@ -49,6 +49,7 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
         self.last_render_time = time.time()
         self.fps_counter = 0
         self.last_fps = 0
+        self.prev_state = None # type: GameState
 
         ########################################################################
 
@@ -358,7 +359,7 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
                 global_state_manager.state.ball_state.rotate_with_ang_vel(delta_time)
 
             state = copy.deepcopy(global_state_manager.state)
-
+        self.prev_state = state
         self.spectate_count = len(state.car_states)
 
         while len(self.car_ribbons) != len(state.car_states):
@@ -432,7 +433,7 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
                 #outline_color = Vector4((1, 1, 1, 1))
             )
 
-            if False: # Update and render ball ribbon
+            if True: # Update and render ball ribbon
                 ball_speed = ball_phys.get_vel(interp_ratio).length
                 speed_frac = (max(0, min(1, ball_speed / 2800)) ** 2)
                 ribbon_alpha = 0.75
@@ -534,6 +535,22 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
             self.spectate_idx += 1;
             if self.spectate_idx >= self.spectate_count:
                 self.spectate_idx = -1
+
+    def keyPressEvent(self, event):
+        # Switch to player closest to ball
+        if event.key() == Qt.Key_P:
+            if not (self.prev_state is None):
+                closest_idx = -1
+                closest_dist = 100_000
+                for i in range(len(self.prev_state.car_states)):
+                    player = self.prev_state.car_states[i] # type: CarState
+                    dist_to_ball = (player.phys.next_pos - self.prev_state.ball_state.next_pos).length
+                    if dist_to_ball < closest_dist:
+                        closest_idx = i
+                        closest_dist = dist_to_ball
+
+                self.spectate_idx = closest_idx
+
 
 g_socket_listener = None
 def run_socket_thread(port):

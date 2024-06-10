@@ -401,7 +401,7 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
         if not (self.outline_renderer is None):
             self.outline_renderer.pr_m_vp.write((proj * lookat).astype('f4'))
 
-        if not (state.boost_pad_states is None): # Render boost pads
+        if not (state.boost_pad_states is None) and state.gamemode != "heatseeker": # Render boost pads
             for i in range(len(state.boost_pad_states)):
                 is_big = state.is_boost_big(i)
 
@@ -433,7 +433,7 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
                 #outline_color = Vector4((1, 1, 1, 1))
             )
 
-            if True: # Update and render ball ribbon
+            if state.gamemode == "heatseeker": # Update and render ball ribbon
                 ball_speed = ball_phys.get_vel(interp_ratio).length
                 speed_frac = (max(0, min(1, ball_speed / 2800)) ** 2)
                 ribbon_alpha = 0.75

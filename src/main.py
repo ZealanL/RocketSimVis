@@ -292,13 +292,19 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
 
                 # Make sure we are actually of the correct distance
                 ball_cam_offset = ball_cam_offset.normalized * dist
-
                 ball_cam_pos = car_pos + ball_cam_offset
                 ball_cam_dir = (ball_pos - ball_cam_pos).normalized
 
             # Calculate car cam dir
             if True:
-                car_cam_dir = (car_vel * Vector3((1, 1, 0))).normalized
+                if car_vel.length > 0:
+                    car_cam_dir = (car_vel * Vector3((1, 1, 0))).normalized
+                else:
+                    car_cam_dir = (car_forward * Vector3((1, 1, 0)))
+                    if car_cam_dir.length > 0:
+                        car_cam_dir = car_cam_dir.normalized
+                    else:
+                        car_cam_dir = Vector3((1, 1, 0))
                 car_cam_offset = -car_cam_dir * self.config.camera_distance.val
                 car_cam_offset.z = self.config.camera_height.val
                 car_cam_pos = car_pos + car_cam_offset
@@ -387,7 +393,6 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR) # Use linear interpolation of pixels for supersampling
 
         camera_pos, camera_target_pos, camera_fov = self.calc_camera_state(state, interp_ratio, delta_time)
-
         proj = Matrix44.perspective_projection(camera_fov, width/height, 0.1, 50 * 1000.0)
         lookat = Matrix44.look_at(
             camera_pos,

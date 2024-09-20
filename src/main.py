@@ -386,14 +386,14 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
         self.ctx.enable(moderngl.BLEND)
 
         self.ctx.cull_face = "back"
-        self.ctx.front_face = "ccw"
+        self.ctx.front_face = "cw"
         self.ctx.enable(moderngl.CULL_FACE)
 
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA) # Normal blending
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR) # Use linear interpolation of pixels for supersampling
 
         camera_pos, camera_target_pos, camera_fov = self.calc_camera_state(state, interp_ratio, delta_time)
-        proj = Matrix44.perspective_projection(camera_fov, width/height, 0.1, 50 * 1000.0)
+        proj = Matrix44.perspective_projection(camera_fov, -width/height, 0.1, 50 * 1000.0)
         lookat = Matrix44.look_at(
             camera_pos,
             camera_target_pos,

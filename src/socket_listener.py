@@ -28,9 +28,16 @@ class SocketListener:
 
             try:
                 j = json.loads(data.decode("utf-8"))
-            except:
-                print("ERROR parsing received text to JSON:")
-                traceback.print_exc()
+            except json.decoder.JSONDecodeError as err:
+                print("ERROR parsing received text to JSON:", err)
+
+                view_range = 10
+                start, stop = max(0, err.pos - view_range), min(err.pos + view_range, len(err.doc) - 1)
+                snippet = err.doc[start:stop].replace('\r', '').replace('\n', ' ')
+                snippet_prefix = "Received JSON: "
+                underline = (' ' * (len(snippet)//2 + len(snippet_prefix))) + '^ HERE'
+                print("\t" + snippet_prefix + snippet)
+                print("\t" + underline)
                 j = None
 
             if not (j is None):

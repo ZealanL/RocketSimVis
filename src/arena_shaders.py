@@ -258,6 +258,7 @@ uniform mat4 m_model;
 in vec3 in_position;
 in vec4 in_normal;
 in vec2 in_texcoord_0;
+in vec3 in_color;
 
 out VD {
 	vec3 vert;

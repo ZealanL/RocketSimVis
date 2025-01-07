@@ -5,6 +5,7 @@ import threading
 import sys 
 import argparse
 import copy
+import struct
 
 from const import *
 from shaders import *
@@ -35,6 +36,11 @@ import numpy as np
 from pyrr import Quaternion, Matrix33, Matrix44, Vector3, Vector4
 
 import pywavefront
+
+# TODO: Move
+def safe_normalize(vec: pyrr.Vector3):
+    length = max(vec.length, 1e-6)
+    return vec / length
 
 # TODO: Move game logic out of here
 class QRSVGLWidget(QtOpenGL.QGLWidget):
@@ -94,16 +100,6 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
             geometry_shader=ARENA_GEOM_SHADER
         )
 
-        '''
-        # Make destination texture for lazy supersampling
-        self.super_texture = self.ctx.texture((self.window_size[0] * 2, self.window_size[1] * 2), 4)
-        self.super_texture.repeat_x = False
-        self.super_texture.repeat_y = False
-        self.super_framebuf = self.ctx.framebuffer(
-            color_attachments=[self.super_texture],
-        )
-        '''
-
         print("Creating outline renderer...")
         #self.outline_renderer = OutlineRenderer(self.ctx, (self.width(), self.height())) # TODO: Fix resizing bugs
         self.outline_renderer = None # Disabled due to weird shader compilation issues
@@ -150,11 +146,18 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
         ############################################
 
         # Make ribbon mesh
-        self.ribbon_max_verts = 100
-        self.ribbon_verts = np.random.randn(self.ribbon_max_verts * 3) * 1000
+        self.ribbon_max_verts = 1000
+        self.ribbon_verts = np.random.randn(self.ribbon_max_verts * 3) * 100
         self.ribbon_vbo = self.ctx.buffer(self.ribbon_verts.astype('f4'))
         self.ribbon_vao = self.ctx.simple_vertex_array(self.prog, self.ribbon_vbo, "in_position")
         self.vaos['ribbon'] = self.ribbon_vao
+
+        # Make debug lines mesh
+        self.lines_max_verts = RenderState.MAX_LINES * 2
+        self.lines_verts = np.random.randn(self.lines_max_verts * 3) * 100
+        self.lines_vbo = self.ctx.buffer(self.lines_verts.astype('f4'))
+        self.lines_vao = self.ctx.simple_vertex_array(self.prog, self.lines_vbo, "in_position")
+        self.vaos['render_lines'] = self.lines_vao
 
         ############################################
 
@@ -172,7 +175,11 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
         if not (self.outline_renderer is None):
             self.outline_renderer.load_vao(model_name, model)
 
-    def render_model(self, pos, forward, up, model_name, texture, scale = 1.0, global_color = None, mode = moderngl.TRIANGLES, outline_color: Vector3 = None):
+    def render_model(self,
+                     pos, forward, up,
+                     model_name, texture, scale = 1.0, global_color = None,
+                     mode = moderngl.TRIANGLES, outline_color: Vector3 = None, vert_amount = None):
+
         if pos is None:
             model_mat = Matrix44.identity()
         else:
@@ -205,7 +212,7 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
             self.t_none.use()
 
         self.ctx.screen.use()
-        self.vaos[model_name].render(mode)
+        self.vaos[model_name].render(mode, vertices=(-1 if (vert_amount is None) else vert_amount))
 
         if outline_color is not None:
             self.outline_renderer.use_framebuf()
@@ -220,8 +227,8 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
         vertices = []
 
         first_point = ribbon.points[0]
-        cam_to_ribbon_dir = -(first_point.pos - camera_pos).normalized
-        ribbon_away_dir = first_point.vel.normalized
+        cam_to_ribbon_dir = safe_normalize(-(first_point.pos - camera_pos))
+        ribbon_away_dir = safe_normalize(first_point.vel)
         ribbon_sideways_dir = ribbon_away_dir.cross(cam_to_ribbon_dir)
 
         for point in ribbon.points: # type: RibbonPoint
@@ -253,9 +260,9 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
         glDisable(GL_CULL_FACE)
         self.render_model(
             None, None, None,
-            "ribbon", self.t_none, 20,
-            color,
-            moderngl.TRIANGLE_STRIP
+            "ribbon", self.t_none, scale=20,
+            global_color=color,
+            mode=moderngl.TRIANGLE_STRIP
         )
         glEnable(GL_CULL_FACE)
 
@@ -263,7 +270,7 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
         pos = Vector3((-4000, 0, 1000))
         ball_pos = state.ball_state.get_pos(interp_ratio)
 
-        cam_dir = (ball_pos - pos).normalized
+        cam_dir = safe_normalize(ball_pos - pos)
 
         is_spectating_car = self.spectate_idx > -1 and len(state.car_states) > self.spectate_idx
         if is_spectating_car:
@@ -276,10 +283,10 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
                 height = self.config.camera_height.val
                 dist = self.config.camera_distance.val
 
-                ball_cam_offset_dir = ((ball_pos - car_pos).normalized * Vector3((1, 1, 0))).normalized
+                ball_cam_offset_dir = safe_normalize(safe_normalize(ball_pos - car_pos) * Vector3((1, 1, 0))).normalized
 
                 # As we tilt up, move the camera down
-                lean_scale = (ball_pos - car_pos).normalized.z
+                lean_scale = safe_normalize(ball_pos - car_pos).z
                 height_clamp = abs(ball_pos.z - car_pos.z) / self.config.camera_lean_min_height_clamp.val
                 if lean_scale > 0:
                     height *= 1 - min(lean_scale * self.config.camera_lean_height_scale.val, height_clamp)
@@ -291,18 +298,18 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
                 ball_cam_offset.z += height
 
                 # Make sure we are actually of the correct distance
-                ball_cam_offset = ball_cam_offset.normalized * dist
+                ball_cam_offset = safe_normalize(ball_cam_offset) * dist
                 ball_cam_pos = car_pos + ball_cam_offset
-                ball_cam_dir = (ball_pos - ball_cam_pos).normalized
+                ball_cam_dir = safe_normalize(ball_pos - ball_cam_pos)
 
             # Calculate car cam dir
             if True:
                 if car_vel.length > 0:
-                    car_cam_dir = (car_vel * Vector3((1, 1, 0))).normalized
+                    car_cam_dir = safe_normalize(car_vel * Vector3((1, 1, 0)))
                 else:
                     car_cam_dir = (car_forward * Vector3((1, 1, 0)))
                     if car_cam_dir.length > 0:
-                        car_cam_dir = car_cam_dir.normalized
+                        car_cam_dir = safe_normalize(car_cam_dir)
                     else:
                         car_cam_dir = Vector3((1, 1, 0))
                 car_cam_offset = -car_cam_dir * self.config.camera_distance.val
@@ -335,7 +342,7 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
             car_cam_ratio = np.clip((self.car_cam_time - car_cam_start_delay) / (car_cam_max_time - car_cam_start_delay), 0, 1)
 
             pos = ball_cam_pos*(1-car_cam_ratio) + car_cam_pos*car_cam_ratio
-            cam_dir = (ball_cam_dir*(1-car_cam_ratio) + car_cam_dir*car_cam_ratio).normalized
+            cam_dir = safe_normalize(ball_cam_dir*(1-car_cam_ratio) + car_cam_dir*car_cam_ratio)
         else:
             self.car_cam_time = 0
 
@@ -424,9 +431,8 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
                     pos, Vector3((1, 0, 0)), Vector3((0, 0, 1)),
                     model_name,
                     self.t_boostpad,
-                    2.5,
+                    scale=2.5,
                 )
-
 
         if True: # Render ball
             ball_phys = state.ball_state
@@ -460,9 +466,9 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
                     self.ball_ribbon,
                     camera_pos,
                     ribbon_lifetime,
-                    50,
-                    ribbon_lifetime / 10,
-                    Vector4((1, 1, 1, ribbon_alpha))
+                    width=50,
+                    start_taper_time=ribbon_lifetime / 10,
+                    color=Vector4((1, 1, 1, ribbon_alpha))
                 )
 
         if True: # Render cars
@@ -478,8 +484,8 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
                 car_up = car_state.phys.get_up(interp_ratio)
                 outline_brightness = 1 - (1 / (1 + (car_pos - camera_pos).length / 1000))
                 self.render_model(
-                    car_pos,
-                    car_forward, car_up, 'Octane.obj', self.ts_octane[car_state.team_num],
+                    car_pos, car_forward, car_up,
+                    model_name='Octane.obj', texture=self.ts_octane[car_state.team_num],
 
                     #outline_color = (Vector3((0, 0.5, 1)) if (car_state.team_num == 0) else Vector3((1, 0.5, 0))) * outline_brightness
                 )
@@ -509,12 +515,37 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
                         Vector4((1, 0.9, 0.4, 1))
                     )
 
+        ###########################################
 
         self.pra_ball_pos.write(state.ball_state.get_pos(interp_ratio).astype('f4'))
-        self.render_model(None, None, None, 'ArenaMeshCustom.obj', self.t_none, 1, Vector4((1,1,1,1)))
+        self.render_model(
+            None, None, None,
+            model_name='ArenaMeshCustom.obj', texture=self.t_none, scale=1, global_color=Vector4((1,1,1,1))
+        )
 
         if not (self.outline_renderer is None):
             self.outline_renderer.render_quad()
+
+        ###########################################
+
+        if len(state.render_state.lines) > 0:
+
+            vertices_flat = np.array(state.render_state.lines).flatten()
+            num_verts = vertices_flat.shape[0] // 3
+
+            # TODO: Manual construction of VBO and VAO every frame is very inefficient
+            # Instead, maybe keep a buffer of the max number of vertices and do a partial render from the occupied regions
+            self.lines_vbo.write(vertices_flat.astype('f4'))
+
+            self.ctx.disable(moderngl.DEPTH_TEST)
+
+            self.render_model(
+                None, None, None,
+                "render_lines", self.t_boost_glow, 1, Vector4((1, 1, 1, 1)),
+                mode=GL_LINES,
+                vert_amount=num_verts
+            )
+            self.ctx.enable(moderngl.DEPTH_TEST)
 
         ###########################################
 
@@ -530,7 +561,7 @@ class QRSVGLWidget(QtOpenGL.QGLWidget):
 
         self.prev_interp_ratio = interp_ratio
 
-    ####################################################
+        ####################################################
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:

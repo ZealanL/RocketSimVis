@@ -179,6 +179,27 @@ default_boost_pad_locations = (
 	(-1792, 4184, 70), (1792, 4184, 70), (0, 4240, 70)
 )
 
+class RenderState:
+    MAX_LINES = 0x2000
+    def __init__(self):
+        self.lines = []
+
+    def read_from_json(self, j):
+        if not (j.get("lines") is None):
+            lines = j["lines"]
+            if len(lines) > RenderState.MAX_LINES:
+                raise Exception(f"Cannot render {len(lines)} lines, maximum is {RenderState.MAX_LINES}")
+
+            for line in lines:
+                try:
+                    start = Vector3(line["start"])
+                    end = Vector3(line["end"])
+                except:
+                    raise Exception(f"Invalid line format: \"{line}\", format should be [start:[x,y,z], end:[x,y,z]] with two elements")
+
+                self.lines.append([start, end])
+
+
 class GameState:
     def __init__(self):
         self.ball_state: PhysState = PhysState()
@@ -193,6 +214,7 @@ class GameState:
         self.recv_interval = -1
 
         self.gamemode = None
+        self.render_state = RenderState()
 
     def is_boost_big(self, idx):
         return self.boost_pad_locations[idx].z == 73
@@ -232,3 +254,7 @@ class GameState:
             self.gamemode = j["gamemode"].lower()
         else:
             self.gamemode = "soccar"
+
+        self.render_state = RenderState()
+        if not (j.get("render") is None):
+            self.render_state.read_from_json(j["render"])

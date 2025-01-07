@@ -7,6 +7,7 @@ uniform mat4 m_vp;
 uniform mat4 m_model;
 
 in vec4 in_position;
+in vec3 in_color;
 
 void main() {
     gl_Position = m_vp * m_model * in_position;
